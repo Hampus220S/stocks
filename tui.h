@@ -3,7 +3,9 @@
  *
  * Written by Hampus Fridholm
  *
- * Last updated: 2025-03-11
+ * Last updated: 2025-03-12
+ *
+ * This library depends on debug.h
  */
 
 #ifndef TUI_H
@@ -302,6 +304,8 @@ extern tui_window_confirm_t* tui_window_confirm_create(tui_t* tui, char* name, c
 #include <errno.h>
 #include <string.h>
 
+#include "debug.h"
+
 /*
  * Init tui (ncurses)
  */
@@ -426,6 +430,8 @@ tui_t* tui_create(void)
     return NULL;
   }
 
+  tui_setup(tui);
+
   return tui;
 }
 
@@ -463,12 +469,17 @@ static inline int tui_window_append(tui_t* tui, tui_window_t* window)
 }
 
 /*
+ *
+ */
+
+
+/*
  * Create ncurses WINDOW* for tui_window_t
  */
 static inline WINDOW* tui_ncurses_window_create(tui_window_t* window)
 {
   // return newwin(h, w, y, x);
-
+  
   return NULL;
 }
 
@@ -486,6 +497,321 @@ static inline void tui_ncurses_window_delete(WINDOW** window)
   delwin(*window);
 
   *window = NULL;
+}
+
+/*
+ * Get the absolute pixel size from tui_size
+ * in case of relative size, parent_size is used in relation
+ */
+static inline int tui_size_abs_get(int parent_size, tui_size_t tui_size)
+{
+  switch (tui_size.type)
+  {
+    case TUI_SIZE_REL:
+      return parent_size * tui_size.value.rel;
+
+    case TUI_SIZE_ABS:
+      return tui_size.value.abs;
+
+    case TUI_SIZE_MAX:
+      return parent_size;
+
+    default: case TUI_SIZE_NONE:
+      return 0;
+  }
+}
+
+/*
+ *
+ */
+typedef struct tui_rect_abs_t
+{
+  int w;
+  int h;
+  int x;
+  int y;
+} tui_rect_abs_t;
+
+/*
+ * Get the absolute value of width, regarding left and right margins
+ */
+static inline int tui_rect_abs_w_get(int l, int r, int parent_w, tui_size_t w)
+{
+  int abs_w = tui_size_abs_get(parent_w, w);
+
+  return MIN(parent_w - l - r, abs_w);
+}
+
+/*
+ * Get the absolute value of height, regarding top and bottom margins
+ */
+static inline int tui_rect_abs_h_get(int t, int b, int parent_h, tui_size_t h)
+{
+  int abs_h = tui_size_abs_get(parent_h, h);
+
+  return MIN(parent_h - t - b, abs_h);
+}
+
+/*
+ * Get the height of wrapped text given the width
+ */
+static inline int tui_text_h_get(char* text, int max_w)
+{
+  size_t length = strlen(text);
+
+  int h = 1;
+
+  int line_w = 0;
+  int space_index = 0;
+
+  for (size_t index = 0; index < length; index++)
+  {
+    char letter = text[index];
+
+    if (letter == ' ')
+    {
+      space_index = index;
+    }
+
+    if (letter == '\n')
+    {
+      line_w = 0;
+
+      h++;
+    }
+    else if (line_w >= max_w)
+    {
+      line_w = 0;
+
+      h++;
+
+      index = space_index;
+    }
+    else
+    {
+      line_w++;
+    }
+
+    // printf("index: %ld space_index: %d letter: %c line_w: %d\n", index, space_index, letter, line_w);
+  }
+
+  return h;
+}
+
+/*
+ * Get the width of wrapped text given the height
+ */
+static inline int tui_text_w_get(char* text, int max_h)
+{
+  int length = strlen(text);
+
+  int break_index = 0;
+
+  int max_w = 0;
+
+  // Store width of every line in text
+  int line_ws[max_h];
+
+  int line_amount = 1;
+
+  for (size_t index = 0; index < length; index++)
+  {
+    char letter = text[index];
+
+    int line_w = index - break_index;
+
+    if (letter == '\n')
+    {
+      line_ws[line_amount - 1] = line_w;
+
+      max_w = MAX(max_w, line_w);
+
+      break_index = index;
+
+      line_amount++;
+    }
+
+    // If the text doesn't fit, return the current max width
+    if (line_amount > max_h)
+    {
+      return max_w;
+    }
+
+    // Store the width of last line
+    if (index + 1 == length)
+    {
+      line_ws[line_amount - 1] = line_w;
+    }
+  }
+
+  for (int count = 0; count <= (max_h - line_amount); count++)
+  {
+    // The following code halfs the largest width
+
+    max_w = 0;
+    int max_index = 0;
+
+    for (int index = 0; index < (line_amount + count); index++)
+    {
+      int line_w = line_ws[index];
+
+      printf("[%d] line_w: %d\n", index, line_w);
+
+      if (line_w > max_w)
+      {
+        max_index = index;
+
+        max_w = line_w;
+      }
+    }
+
+    // The last iteration, the halfing is not interesting
+    int half_w = line_ws[max_index] / 2;
+
+    // Store an extra character if width was odd
+    line_ws[max_index] = (line_ws[max_index] % 2 == 0) ? half_w : half_w + 1;
+
+    // Store the other half at new slot
+    line_ws[line_amount + count] = half_w;
+  }
+
+  // After the halfing, max width will be smaller
+  return max_w;
+}
+
+/*
+ * Get widths of lines in text, regarding max height
+ */
+static inline void tui_text_ws_get(int* ws, char* text, int max_h)
+{
+  int max_w = tui_text_w_get(text, max_h);
+
+  printf("max_w: %d\n", max_w);
+
+  size_t length = strlen(text);
+
+  int line_index = 0;
+  int line_w = 0;
+
+  int space_index = 0;
+
+  for (size_t index = 0; (index < length) && (line_index < max_h); index++)
+  {
+    char letter = text[index];
+
+    if (letter == ' ')
+    {
+      space_index = index;
+    }
+
+    if (letter == ' ' && line_w == 0)
+    {
+      line_w = 0;
+    }
+    else if (letter == '\n')
+    {
+      ws[line_index++] = line_w;
+
+      line_w = 0;
+    }
+    else if (line_w >= max_w)
+    {
+      // full line width - last partial word
+      ws[line_index++] = line_w - (index - space_index);
+
+      line_w = 0;
+
+      index = space_index;
+    }
+    else
+    {
+      line_w++;
+    }
+
+    // Store the width of last line
+    if (index + 1 == length)
+    {
+      ws[line_index] = line_w;
+    }
+  }
+}
+
+/*
+ * Get x position of tui_rect_abs_t
+ */
+static inline int tui_rect_abs_x_get(tui_pos_t pos, int l, int r, int parent_w, int w)
+{
+  switch (pos)
+  {
+    case TUI_POS_LEFT:
+      return l;
+
+    case TUI_POS_RIGHT:
+      return parent_w - w - r;
+
+    default: case TUI_POS_CENTER:
+      return (float) (parent_w - w) / 2.f;
+  }
+}
+
+/*
+ * Get y position of tui_rect_abs_t
+ */
+static inline int tui_rect_abs_y_get(tui_pos_t pos, int t, int b, int parent_h, int h)
+{
+  switch (pos)
+  {
+    case TUI_POS_TOP:
+      return t;
+
+    case TUI_POS_BOTTOM:
+      return parent_h - h - b;
+
+    default: case TUI_POS_CENTER:
+      return (float) (parent_h - h) / 2.f;
+  }
+}
+
+/*
+ * Get absolute size of confirm window
+ */
+static inline tui_rect_abs_t tui_window_confirm_rect_abs_get(tui_window_confirm_t* window, int parent_w, int parent_h)
+{
+  tui_rect_t rect = window->head.rect;
+
+  int l = tui_size_abs_get(parent_w, rect.l);
+  int r = tui_size_abs_get(parent_w, rect.r);
+  int t = tui_size_abs_get(parent_h, rect.t);
+  int b = tui_size_abs_get(parent_h, rect.b);
+
+  int w = tui_rect_abs_w_get(l, r, parent_w, rect.w);
+  int h = tui_rect_abs_h_get(t, b, parent_h, rect.h);
+
+  // If size is not specified, height is sat to minimum
+  if (rect.w.type == TUI_SIZE_NONE && rect.h.type == TUI_SIZE_NONE)
+  {
+    h = 5;
+  }
+
+  int text_w = MAX(0, w - 2);
+  int text_h = MAX(0, h - 4);
+
+  if (rect.w.type == TUI_SIZE_NONE)
+  {
+    text_w = tui_text_w_get(window->prompt, text_h);
+  }
+  else if (rect.h.type == TUI_SIZE_NONE)
+  {
+    text_h = tui_text_h_get(window->prompt, text_w);
+  }
+
+  w = text_w + 2;
+  h = text_h + 4;
+
+  int x = tui_rect_abs_x_get(rect.xpos, l, r, parent_w, w);
+  int y = tui_rect_abs_y_get(rect.ypos, t, b, parent_h, h);
+
+  return (tui_rect_abs_t) { w, h, x, y };
 }
 
 /*
@@ -511,7 +837,9 @@ static inline tui_window_confirm_t* _tui_window_confirm_create(tui_t* tui, char*
     .title = title,
     .rect  = rect,
     .event = event,
-    .tui   = tui
+    .tui   = tui,
+    .parent_type = TUI_PARENT_TUI,
+    .parent.tui  = tui
   };
 
   *window = (tui_window_confirm_t)
@@ -753,7 +1081,7 @@ static inline void tui_render(tui_t* tui)
 {
   curs_set(0);
 
-  erase();
+  refresh();
 
   if (tui->menu)
   {
@@ -766,8 +1094,6 @@ static inline void tui_render(tui_t* tui)
 
     tui_window_render(window);
   }
-
-  refresh();
 }
 
 /*
@@ -793,6 +1119,10 @@ void tui_start(tui_t* tui)
 
   while (tui->is_running && (key = wgetch(stdscr)))
   {
+    erase();
+
+    mvprintw(1, 1, "KEY: %d", key);
+
     if (key == KEY_CTRLS)
     {
       tui->is_running = false;
