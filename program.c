@@ -12,7 +12,11 @@ int main(int argc, char* argv[])
 {
   tui_init();
 
-  getch();
+  tui_t* tui = tui_create();
+
+  tui_start(tui); 
+
+  tui_free(&tui);
 
   tui_quit();
 
