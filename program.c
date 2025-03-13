@@ -17,101 +17,85 @@ int main(int argc, char* argv[])
 
   printf("Text:\n%s\n", text);
 
-  int w = 10;
 
-  int h = tui_text_h_get(text, w);
-
-  printf("h: %d\n", h);
-
-  // w = tui_text_w_get(text, h);
-
-  printf("w: %d\n", w);
-
-
-  int ws[h];
-
-  tui_text_ws_get(ws, text, h);
-
-  for (int index = 0; index < h; index++)
+  for (int count = 15; count < 26; count++)
   {
-    printf("[%d] w: %d\n", index, ws[index]);
-  }
+    printf("\nTesting width : %d\n\n", count);
+    int w = count;
 
-  for (int index = 0; index < w; index++)
-  {
-    printf("+");
-  }
+    int h = tui_text_h_get(text, w);
 
-  printf("\n");
-
-
-  size_t length = strlen(text);
-
-  int line_index = 0;
-  int line_w = 0;
-
-  for (size_t index = 0; index < length; index++)
-  {
-    char letter = text[index];
-
-    if (letter == ' ' && line_w == 0)
+    if (h == -1)
     {
-      line_w = 0;
-    }
-    else if (line_w >= ws[line_index])
-    {
-      line_index++;
-
-      line_w = 0;
-
-      printf("\n");
-    }
-    else
-    {
-      printf("%c", letter);
-
-      line_w++;
-    }
-  }
-
-  /*
-  int line_w = 0;
-  int space_index = 0;
-
-  for (size_t index = 0; index < length; index++)
-  {
-    char letter = text[index];
-
-    if (letter == '\n')
-    {
-      line_w = 0;
-
-      h++;
-
       continue;
     }
 
-    if (letter == ' ')
+    printf("h: %d\n", h);
+
+    printf("w: %d\n", tui_text_w_get(text, h));
+
+
+    int ws[h];
+
+    tui_text_ws_get(ws, text, h);
+
+    for (int index = 0; index < h; index++)
     {
-      space_index = index;
+      printf("[%d] w: %d\n", index, ws[index]);
     }
 
-    if (line_w > max_w)
+
+    for (int index = 0; index < w; index++)
     {
-      line_w = 0;
-
-      h++;
-
-      index = space_index;
-
-      continue;
+      printf("+");
     }
 
-    line_w++;
+    printf("\n");
+
+
+    w = tui_text_w_get(text, h);
+
+
+    for (int index = 0; index < w; index++)
+    {
+      printf(".");
+    }
+
+    printf("\n");
+
+
+
+    size_t length = strlen(text);
+
+    int line_index = 0;
+    int line_w = 0;
+
+    for (size_t index = 0; index < length; index++)
+    {
+      char letter = text[index];
+
+      if (letter == ' ' && line_w == 0)
+      {
+        line_w = 0;
+      }
+      else if (line_w >= ws[line_index])
+      {
+        line_index++;
+
+        line_w = 0;
+
+        printf("\n");
+      }
+      else
+      {
+        printf("%c", letter);
+
+        line_w++;
+      }
+    }
+
+    printf("\n");
   }
-  */
-
-  printf("\n");
 
   /*
   debug_file_open("debug.log");

@@ -303,6 +303,7 @@ extern tui_window_confirm_t* tui_window_confirm_create(tui_t* tui, char* name, c
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "debug.h"
 
@@ -564,9 +565,13 @@ static inline int tui_text_h_get(char* text, int max_w)
   int line_w = 0;
   int space_index = 0;
 
+  int last_space_index = space_index;
+
   for (size_t index = 0; index < length; index++)
   {
     char letter = text[index];
+
+    // printf("before index: %ld space_index: %d letter: %c line_w: %d\n", index, space_index, letter, line_w);
 
     if (letter == ' ')
     {
@@ -585,106 +590,75 @@ static inline int tui_text_h_get(char* text, int max_w)
 
       h++;
 
+      // Current word cannot be wrapped
+      if (space_index == last_space_index)
+      {
+        printf("Cannot be wrapped: max_w: %d\n", max_w);
+        return -1;
+      }
+
       index = space_index;
+
+      last_space_index = space_index;
     }
     else
     {
       line_w++;
     }
 
-    // printf("index: %ld space_index: %d letter: %c line_w: %d\n", index, space_index, letter, line_w);
+    // printf("after  index: %ld space_index: %d letter: %c line_w: %d\n", index, space_index, letter, line_w);
   }
 
   return h;
 }
 
 /*
- * Get the width of wrapped text given the height
+ * Get the min width of wrapped text given the height
  */
-static inline int tui_text_w_get(char* text, int max_h)
+static inline int tui_text_w_get(char* text, int h)
 {
-  int length = strlen(text);
+  int left  = 1;
+  int right = strlen(text);
 
-  int break_index = 0;
+  int min_w = right;
 
-  int max_w = 0;
-
-  // Store width of every line in text
-  int line_ws[max_h];
-
-  int line_amount = 1;
-
-  for (size_t index = 0; index < length; index++)
+  // Try every value between left and right, inclusive left == right
+  while (left <= right)
   {
-    char letter = text[index];
+    int mid = (left + right) / 2;
 
-    int line_w = index - break_index;
+    int curr_h = tui_text_h_get(text, mid);
 
-    if (letter == '\n')
+    // printf("mid: %d curr_h: %d h: %d\n", mid, curr_h, h);
+
+    // If width was too small to wrap, increase width
+    if (curr_h == -1)
     {
-      line_ws[line_amount - 1] = line_w;
-
-      max_w = MAX(max_w, line_w);
-
-      break_index = index;
-
-      line_amount++;
+      left = mid + 1;
+    }
+    // If height got to large, increase width
+    else if (curr_h > h)
+    {
+      left = mid + 1;
+    }
+    else // If the height is smaller than max height, store current best width
+    {
+      min_w = mid;
+      right = mid - 1;
     }
 
-    // If the text doesn't fit, return the current max width
-    if (line_amount > max_h)
-    {
-      return max_w;
-    }
-
-    // Store the width of last line
-    if (index + 1 == length)
-    {
-      line_ws[line_amount - 1] = line_w;
-    }
+    // printf("left: %d right: %d w: %d\n", left, right, w);
   }
 
-  for (int count = 0; count <= (max_h - line_amount); count++)
-  {
-    // The following code halfs the largest width
-
-    max_w = 0;
-    int max_index = 0;
-
-    for (int index = 0; index < (line_amount + count); index++)
-    {
-      int line_w = line_ws[index];
-
-      printf("[%d] line_w: %d\n", index, line_w);
-
-      if (line_w > max_w)
-      {
-        max_index = index;
-
-        max_w = line_w;
-      }
-    }
-
-    // The last iteration, the halfing is not interesting
-    int half_w = line_ws[max_index] / 2;
-
-    // Store an extra character if width was odd
-    line_ws[max_index] = (line_ws[max_index] % 2 == 0) ? half_w : half_w + 1;
-
-    // Store the other half at new slot
-    line_ws[line_amount + count] = half_w;
-  }
-
-  // After the halfing, max width will be smaller
-  return max_w;
+  return min_w;
 }
 
 /*
  * Get widths of lines in text, regarding max height
  */
-static inline void tui_text_ws_get(int* ws, char* text, int max_h)
+static inline void tui_text_ws_get(int* ws, char* text, int h)
 {
-  int max_w = tui_text_w_get(text, max_h);
+  int max_w = tui_text_w_get(text, h);
 
   printf("max_w: %d\n", max_w);
 
@@ -695,7 +669,7 @@ static inline void tui_text_ws_get(int* ws, char* text, int max_h)
 
   int space_index = 0;
 
-  for (size_t index = 0; (index < length) && (line_index < max_h); index++)
+  for (size_t index = 0; (index < length) && (line_index < h); index++)
   {
     char letter = text[index];
 
@@ -722,6 +696,10 @@ static inline void tui_text_ws_get(int* ws, char* text, int max_h)
       line_w = 0;
 
       index = space_index;
+
+      // printf("index: %ld\n", index);
+
+      // usleep(100000);
     }
     else
     {
