@@ -107,9 +107,19 @@ typedef struct tui_rect_t
   tui_size_t t; // Margin on top
   tui_size_t b; // Margin on bottom
 
-  tui_pos_t  xpos;   // Horizontal alignment
-  tui_pos_t  ypos;   // Vertical   alignment
+  tui_pos_t xpos; // Horizontal alignment
+  tui_pos_t ypos; // Vertical   alignment
 } tui_rect_t;
+
+/*
+ * TUI window title
+ */
+typedef struct tui_title_t
+{
+  char*     title;
+  tui_pos_t pos;
+  size_t    title_len;
+} tui_title_t;
 
 /*
  * Declarations of TUI structs
@@ -149,7 +159,7 @@ typedef enum tui_parent_type_t
 } tui_parent_type_t;
 
 /*
- *
+ * Definitions of event function signatures
  */
 
 typedef void* (*tui_window_list_item_event_t)(tui_window_list_item_t* item, int key);
@@ -162,12 +172,15 @@ typedef void* (*tui_event_t)(tui_t* tui, int key);
 
 /*
  * General window struct, same for all windows
+ *
+ * is_interact tells if the window can be interacted with
  */
 typedef struct tui_window_t
 {
   tui_window_type_t  type;
-  char*              name;   // ID name
-  char*              title;  // Displaying title
+  char*              name;
+  bool               is_visable;
+  bool               is_interact;
   tui_rect_t         rect;
   tui_rect_abs_t     abs_rect;
   WINDOW*            window;
@@ -200,6 +213,7 @@ typedef struct tui_window_list_item_t
 typedef struct tui_window_list_t
 {
   tui_window_t             head;
+  tui_title_t              title;
   tui_window_list_item_t** items;
   size_t                   item_count;
   ssize_t                  item_count_max; // Max allowed items
@@ -216,6 +230,7 @@ typedef struct tui_window_list_t
 typedef struct tui_window_input_t
 {
   tui_window_t head;
+  tui_title_t  title;
   char*        buffer;
   size_t       buffer_size;
   size_t       buffer_len;
@@ -250,8 +265,11 @@ typedef struct tui_window_text_t
   tui_window_t head;
   char*        text;
   size_t       text_len;
-  tui_pos_t    xpos; // Horizontal position
-  tui_pos_t    ypos; // Vertical   position
+  tui_pos_t    xpos;        // Horizontal position
+  tui_pos_t    ypos;        // Vertical   position
+  bool         is_interact; // Requires interaction
+  char*        text_close;
+  size_t       text_close_len;
 } tui_window_text_t;
 
 /*
@@ -281,7 +299,8 @@ typedef struct tui_menu_t
 /*
  * TUI struct containing menus
  *
- * The active menu has it's own field
+ * Active menu and active window has shortcuts
+ * The active window should be either TUI window or inside menu
  *
  * The first window in array is the active one
  */
@@ -291,9 +310,10 @@ typedef struct tui_t
   int            h;
   tui_menu_t**   menus;
   size_t         menu_count;
-  tui_menu_t*    menu;         // Current menu
   tui_window_t** windows;
   size_t         window_count;
+  tui_menu_t*    menu;         // Active menu
+  tui_window_t*  window;       // Active window
   bool           is_running;   // TUI is running
   tui_event_t    event;
 } tui_t;
@@ -306,14 +326,9 @@ extern void   tui_init(void);
 
 extern void   tui_quit(void);
 
-extern tui_t* tui_create(void);
+extern tui_t* tui_create(int w, int h, tui_event_t event);
 
 extern void   tui_delete(tui_t** tui);
-
-
-extern int                   tui_window_confirm_delete(tui_t* tui, char* name);
-
-extern tui_window_confirm_t* tui_window_confirm_create(tui_t* tui, char* name, char* title, tui_rect_t rect, tui_window_event_t event, char* prompt, char* text_yes, char* text_no, bool answer);
 
 #endif // TUI_H
 
@@ -740,6 +755,8 @@ static inline int tui_rect_abs_y_get(tui_pos_t pos, int t, int b, int parent_h, 
 
 /*
  * Get absolute size of text window
+ * 
+ * If window is popup, extra height for button is required
  */
 static inline tui_rect_abs_t tui_window_text_rect_abs_get(tui_window_text_t* window, int parent_w, int parent_h)
 {
@@ -754,7 +771,7 @@ static inline tui_rect_abs_t tui_window_text_rect_abs_get(tui_window_text_t* win
   int h = tui_rect_abs_h_get(t, b, parent_h, rect.h);
 
   int text_w = MAX(1, w - 4);
-  int text_h = MAX(1, h - 2);
+  int text_h = MAX(1, window->is_interact ? (h - 4) : (h - 2));
 
   // If size is not specified, height is sat to minimum
   if (rect.w.type == TUI_SIZE_NONE && rect.h.type == TUI_SIZE_NONE)
@@ -774,7 +791,7 @@ static inline tui_rect_abs_t tui_window_text_rect_abs_get(tui_window_text_t* win
   }
 
   w = text_w + 4;
-  h = text_h + 2;
+  h = window->is_interact ? (text_h + 4) : (text_h + 2);
 
   int x = tui_rect_abs_x_get(rect.xpos, l, r, parent_w, w);
   int y = tui_rect_abs_y_get(rect.ypos, t, b, parent_h, h);
@@ -829,7 +846,7 @@ static inline tui_rect_abs_t tui_window_confirm_rect_abs_get(tui_window_confirm_
 /*
  * Just create a tui_window_text_t object
  */
-static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, char* name, char* title, tui_rect_t rect, tui_window_event_t event, char* text, tui_pos_t xpos, tui_pos_t ypos)
+static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, char* name, bool is_visable, tui_rect_t rect, tui_window_event_t event, char* text, bool is_interact, char* text_close, tui_pos_t xpos, tui_pos_t ypos)
 {
   tui_window_text_t* window = malloc(sizeof(tui_window_text_t));
 
@@ -844,22 +861,30 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, char* name,
 
   tui_window_t head = (tui_window_t)
   {
-    .type  = TUI_WINDOW_TEXT,
-    .name  = name,
-    .title = title,
-    .rect  = rect,
-    .event = event,
-    .tui   = tui
+    .type        = TUI_WINDOW_TEXT,
+    .name        = name,
+    .is_visable  = is_visable,
+    .is_interact = is_interact,
+    .rect        = rect,
+    .event       = event,
+    .tui         = tui
   };
 
   *window = (tui_window_text_t)
   {
-    .head     = head,
-    .text     = text,
-    .text_len = strlen(text),
-    .xpos     = xpos,
-    .ypos     = ypos
+    .head           = head,
+    .text           = text,
+    .text_len       = strlen(text),
+    .is_interact    = is_interact,
+    .xpos           = xpos,
+    .ypos           = ypos
   };
+
+  if (text_close)
+  {
+    window->text_close     = text_close;
+    window->text_close_len = strlen(text_close);
+  }
 
   return window;
 }
@@ -867,7 +892,7 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, char* name,
 /*
  * Just create a tui_window_confirm_t object
  */
-static inline tui_window_confirm_t* _tui_window_confirm_create(tui_t* tui, char* name, char* title, tui_rect_t rect, tui_window_event_t event, char* prompt, char* text_yes, char* text_no, bool answer)
+static inline tui_window_confirm_t* _tui_window_confirm_create(tui_t* tui, char* name, bool is_visable, tui_rect_t rect, tui_window_event_t event, char* prompt, char* text_yes, char* text_no, bool answer)
 {
   tui_window_confirm_t* window = malloc(sizeof(tui_window_confirm_t));
 
@@ -882,12 +907,13 @@ static inline tui_window_confirm_t* _tui_window_confirm_create(tui_t* tui, char*
 
   tui_window_t head = (tui_window_t)
   {
-    .type  = TUI_WINDOW_CONFIRM,
-    .name  = name,
-    .title = title,
-    .rect  = rect,
-    .event = event,
-    .tui   = tui
+    .type        = TUI_WINDOW_CONFIRM,
+    .name        = name,
+    .is_visable  = is_visable,
+    .is_interact = true,
+    .rect        = rect,
+    .event       = event,
+    .tui         = tui
   };
 
   *window = (tui_window_confirm_t)
@@ -908,7 +934,7 @@ static inline tui_window_confirm_t* _tui_window_confirm_create(tui_t* tui, char*
 /*
  * Create a confirm window and append it to TUI windows
  */
-tui_window_confirm_t* tui_window_confirm_create(tui_t* tui, char* name, char* title, tui_rect_t rect, tui_window_event_t event, char* prompt, char* text_yes, char* text_no, bool answer)
+tui_window_confirm_t* tui_window_confirm_create(tui_t* tui, char* name, bool is_visable, tui_rect_t rect, tui_window_event_t event, char* prompt, char* text_yes, char* text_no, bool answer)
 {
   if (!tui || !name)
   {
@@ -917,7 +943,7 @@ tui_window_confirm_t* tui_window_confirm_create(tui_t* tui, char* name, char* ti
     return NULL;
   }
 
-  tui_window_confirm_t* window = _tui_window_confirm_create(tui, name, title, rect, event, prompt, text_yes, text_no, answer);
+  tui_window_confirm_t* window = _tui_window_confirm_create(tui, name, is_visable, rect, event, prompt, text_yes, text_no, answer);
 
   if (!window)
   {
@@ -945,9 +971,48 @@ tui_window_confirm_t* tui_window_confirm_create(tui_t* tui, char* name, char* ti
 }
 
 /*
+ * Create a text window and append it to TUI
+ */
+tui_window_text_t* tui_window_text_create(tui_t* tui, char* name, bool is_visable, tui_rect_t rect, tui_window_event_t event, char* text, bool is_interact, char* text_close, tui_pos_t xpos, tui_pos_t ypos)
+{
+  if (!tui || !name)
+  {
+    errno = EFAULT; // Bad address
+
+    return NULL;
+  }
+
+  tui_window_text_t* window = _tui_window_text_create(tui, name, is_visable, rect, event, text, is_interact, text_close, xpos, ypos);
+
+  if (!window)
+  {
+    return NULL;
+  }
+
+  // Assign window parent
+  window->head.parent_type = TUI_PARENT_TUI;
+  window->head.parent.tui  = tui;
+
+  tui_rect_abs_t abs_rect = tui_window_text_rect_abs_get(window, tui->w, tui->h);
+
+  // Assign window ncurses window
+  window->head.abs_rect = abs_rect;
+  window->head.window   = tui_ncurses_window_create(abs_rect.w, abs_rect.h, abs_rect.x, abs_rect.y);
+
+  if (tui_window_append(tui, (tui_window_t*) window) != 0)
+  {
+    free(window);
+
+    return NULL;
+  }
+
+  return window;
+}
+
+/*
  * Create a text window and append it to menu
  */
-tui_window_text_t* tui_menu_window_text_create(tui_menu_t* menu, char* name, char* title, tui_rect_t rect, tui_window_event_t event, char* text, tui_pos_t xpos, tui_pos_t ypos)
+tui_window_text_t* tui_menu_window_text_create(tui_menu_t* menu, char* name, bool is_visable, tui_rect_t rect, tui_window_event_t event, char* text, bool is_interact, char* text_close, tui_pos_t xpos, tui_pos_t ypos)
 {
   if (!menu || !name)
   {
@@ -956,7 +1021,7 @@ tui_window_text_t* tui_menu_window_text_create(tui_menu_t* menu, char* name, cha
     return NULL;
   }
 
-  tui_window_text_t* window = _tui_window_text_create(menu->tui, name, title, rect, event, text, xpos, ypos);
+  tui_window_text_t* window = _tui_window_text_create(menu->tui, name, is_visable, rect, event, text, is_interact, text_close, xpos, ypos);
 
   if (!window)
   {
@@ -1115,15 +1180,64 @@ static inline ssize_t tui_menu_index_get(tui_t* tui, char* name)
 }
 
 /*
- * Set window of name to TUI active window
+ * Rotate array of windows - to cycle active window
  */
-static inline void tui_active_window_set(tui_t* tui, char* name)
+static inline void tui_windows_rotate(tui_window_t** windows, size_t count, size_t turns)
 {
+  if (turns == 0) return;
 
+  size_t shift = turns % count;
+
+  tui_window_t* temp_windows[shift];
+
+  for (size_t index = 0; index < shift; index++)
+  {
+    temp_windows[index] = windows[index];
+  }
+
+  for (size_t index = 0; index < (count - shift); index++)
+  {
+    windows[index] = windows[shift + index];
+  }
+
+  for (size_t index = 0; index < shift; index++)
+  {
+    windows[count - shift + index] = temp_windows[index];
+  }
 }
 
 /*
- * Set menu of name to active menu
+ * Choose new active window from array of windows
+ */
+static inline tui_window_t* tui_windows_active_window_get(tui_window_t** windows, size_t count)
+{
+  for (size_t index = 0; index < count; index++)
+  {
+    tui_window_t* window = windows[index];
+
+    if (!window->is_visable)
+    {
+      continue;
+    }
+
+    if (window->type == TUI_WINDOW_PARENT)
+    {
+      tui_window_parent_t* parent = (tui_window_parent_t*) window;
+
+      return tui_windows_active_window_get(parent->children, parent->child_count);
+    }
+  
+    if (window->is_interact)
+    {
+      return window;
+    }
+  }
+
+  return NULL;
+}
+
+/*
+ * Set TUI active menu
  */
 static inline void tui_active_menu_set(tui_t* tui, char* name)
 {
@@ -1131,7 +1245,63 @@ static inline void tui_active_menu_set(tui_t* tui, char* name)
 
   if (index != -1)
   {
-    tui->menu = tui->menus[index];
+    tui_menu_t* menu = tui->menus[index];
+
+    tui->menu = menu;
+
+    tui_window_t* window = tui_windows_active_window_get(menu->windows, menu->window_count);
+
+    if (window)
+    {
+      tui->window = window;
+    }
+  }
+}
+
+/*
+ * Set TUI active window
+ */
+static inline void tui_active_window_set(tui_t* tui, char* name)
+{
+  ssize_t index = tui_window_index_get(tui, name);
+
+  if (index != -1)
+  {
+    tui_window_t* window = tui->windows[index];
+
+    window->is_visable = true;
+
+    tui->window = window;
+
+    tui_windows_rotate(tui->windows, tui->window_count, index);
+  }
+}
+
+/*
+ * Unset TUI active window
+ *
+ * Automatically set new active window
+ */
+static inline void tui_active_window_unset(tui_t* tui)
+{
+  tui->window = NULL;
+
+  tui_window_t* window = tui_windows_active_window_get(tui->windows, tui->window_count);
+
+  if (window)
+  {
+    tui->window = window;
+  }
+  else
+  {
+    tui_menu_t* menu = tui->menu;
+
+    window = tui_windows_active_window_get(menu->windows, menu->window_count);
+
+    if (window)
+    {
+      tui->window = window;
+    }
   }
 }
 
@@ -1243,6 +1413,39 @@ void tui_delete(tui_t** tui)
 }
 
 /*
+ * Render window title
+ */
+static inline void tui_title_render(tui_window_t* window, tui_title_t title)
+{
+  int max_w = (window->abs_rect.w - 2);
+
+  int x_shift = TUI_POS_FACTOR[title.pos] * (max_w - title.title_len) / 2;
+
+  wmove(window->window, 0, 1 + x_shift);
+
+  wprintw(window->window, "%s", title.title);
+}
+
+/*
+ * Show selected text if it is the active window
+ */
+static inline void tui_window_select_show(tui_t* tui, tui_window_t* window)
+{
+  if (window == tui->window)
+  {
+    wattron(window->window, A_REVERSE);
+  }
+}
+
+/*
+ * Hide selected text
+ */
+static inline void tui_window_select_hide(tui_t* tui, tui_window_t* window)
+{
+  wattroff(window->window, A_REVERSE);
+}
+
+/*
  * Render text window
  */
 static inline void tui_window_text_render(tui_window_text_t* window)
@@ -1260,12 +1463,27 @@ static inline void tui_window_text_render(tui_window_text_t* window)
     .x = 2,
     .y = 1,
     .w = abs_rect.w - 4,
-    .h = abs_rect.h - 2
+    .h = window->is_interact ? (abs_rect.h - 4) : (abs_rect.h - 2)
   };
+
 
   box(head.window, 0, 0);
 
+
   tui_text_render(head.window, window->text, text_rect, window->xpos, window->ypos);
+
+  if (window->is_interact)
+  {
+    int x_shift = (head.abs_rect.w - window->text_close_len) / 2;
+
+    wmove(head.window, head.abs_rect.h - 2, x_shift);
+
+    tui_window_select_show(head.tui, (tui_window_t*) window);
+
+    wprintw(head.window, "%s", window->text_close);
+
+    tui_window_select_hide(head.tui, (tui_window_t*) window);
+  }
 
   wrefresh(head.window);
 }
@@ -1307,12 +1525,12 @@ static inline void tui_window_confirm_render(tui_window_confirm_t* window)
 
   if (window->answer == TUI_YES)
   {
-    wattron(head.window, A_REVERSE);
+    tui_window_select_show(head.tui, (tui_window_t*) window);
   }
 
   wprintw(head.window, "%s", window->text_yes);
 
-  wattroff(head.window, A_REVERSE);
+  tui_window_select_hide(head.tui, (tui_window_t*) window);
 
 
   waddch(head.window, ' ');
@@ -1320,19 +1538,19 @@ static inline void tui_window_confirm_render(tui_window_confirm_t* window)
   
   if (window->answer == TUI_NO)
   {
-    wattron(head.window, A_REVERSE);
+    tui_window_select_show(head.tui, (tui_window_t*) window);
   }
 
   wprintw(head.window, "%s", window->text_no);
 
-  wattroff(head.window, A_REVERSE);
+  tui_window_select_hide(head.tui, (tui_window_t*) window);
 
 
   wrefresh(head.window);
 }
 
 /*
- * Render TUI window
+ * Render window
  */
 static inline void tui_window_render(tui_window_t* window)
 {
@@ -1352,15 +1570,18 @@ static inline void tui_window_render(tui_window_t* window)
 }
 
 /*
- * Render TUI menu with it's windows
+ * Render windows
  */
-static inline void tui_menu_render(tui_menu_t* menu)
+static inline void tui_windows_render(tui_window_t** windows, size_t count)
 {
-  for (size_t index = 0; index < menu->window_count; index++)
+  for (size_t index = count; index-- > 0;)
   {
-    tui_window_t* window = menu->windows[index];
+    tui_window_t* window = windows[index];
 
-    tui_window_render(window);
+    if (window->is_visable)
+    {
+      tui_window_render(window);
+    }
   }
 }
 
@@ -1373,17 +1594,14 @@ static inline void tui_render(tui_t* tui)
 
   refresh();
 
-  if (tui->menu)
+  tui_menu_t* menu = tui->menu;
+
+  if (menu)
   {
-    tui_menu_render(tui->menu);
+    tui_windows_render(menu->windows, menu->window_count);
   }
 
-  for (size_t index = 0; index < tui->window_count; index++)
-  {
-    tui_window_t* window = tui->windows[index];
-
-    tui_window_render(window);
-  }
+  tui_windows_render(tui->windows, tui->window_count);
 }
 
 /*
@@ -1427,17 +1645,41 @@ static inline void tui_window_event(tui_window_t* window, int key)
 }
 
 /*
+ * Size event - triggered from size text window
+ */
+static inline void* tui_size_window_event(tui_window_t* head, int key)
+{
+  tui_window_text_t* window = (tui_window_text_t*) head;
+
+  switch (key)
+  {
+    case KEY_ENTR:
+      head->is_visable = false;
+
+      tui_active_window_unset(head->tui);
+      break;
+
+    default:
+      break;
+  }
+
+  return NULL;
+}
+
+/*
  * Quit event - triggered from quit confirm window
  */
 static inline void* tui_quit_window_event(tui_window_t* head, int key)
 {
-  info_print("tui_quit_window_event : %d", key);
-
   tui_window_confirm_t* window = (tui_window_confirm_t*) head;
 
   switch (key)
   {
     case KEY_ENTR:
+      head->is_visable = false;
+
+      tui_active_window_unset(head->tui);
+
       if (window->answer == TUI_YES)
       {
         head->tui->is_running = false;
@@ -1470,92 +1712,79 @@ static inline void* tui_event(tui_t* tui, int key)
 }
 
 /*
- * Trigger window event
- *
- * If the window is a parent window, trigger child events
- */
-static inline void tui_window_event_trigger(tui_window_t* window, int key)
-{
-  // Trigger default behavior window event
-  tui_window_event(window, key);
-
-  if (window->event)
-  {
-    window->event(window, key);
-  }
-
-  if (window->type == TUI_WINDOW_PARENT)
-  {
-    tui_window_parent_t* parent = (tui_window_parent_t*) window;
-
-    for (size_t index = 0; index < parent->child_count; index++)
-    {
-      tui_window_t* child = parent->children[index];
-
-      tui_window_event_trigger(child, key);
-    }
-  }
-}
-
-/*
- * Trigger menu event and windows' events
- */
-static inline void tui_menu_event_trigger(tui_menu_t* menu, int key)
-{
-  if (menu->event)
-  {
-    menu->event(menu, key);
-  }
-
-  for (size_t index = 0; index < menu->window_count; index++)
-  {
-    tui_window_t* window = menu->windows[index];
-
-    tui_window_event_trigger(window, key);
-  }
-}
-
-/*
- * Trigger TUI event, menus' events and windows' events
+ * Trigger event of active window
  */
 static inline void tui_event_trigger(tui_t* tui, int key)
 {
+  if (tui->window)
+  {
+    tui_window_t* window = tui->window;
+
+    // Trigger default behavior of window
+    tui_window_event(window, key);
+
+    if (window->event)
+    {
+      window->event(window, key);
+    }
+
+    if (window->parent_type == TUI_PARENT_MENU)
+    {
+      tui_menu_t* menu = window->parent.menu;
+
+      if (menu->event)
+      {
+        menu->event(menu, key);
+      }
+    }
+  }
+
+  tui_event(tui, key);
+
   if (tui->event)
   {
     tui->event(tui, key);
-  }
-
-  for (size_t index = 0; index < tui->menu_count; index++)
-  {
-    tui_menu_t* menu = tui->menus[index];
-
-    tui_menu_event_trigger(menu, key);
-  }
-
-  for (size_t index = 0; index < tui->window_count; index++)
-  {
-    tui_window_t* window = tui->windows[index];
-
-    tui_window_event_trigger(window, key);
   }
 }
 
 /*
  * Setup TUI by creating default windows
  */
-static inline void tui_setup(tui_t* tui)
+static inline void tui_setup(tui_t* tui, int w, int h)
 {
-  tui_window_confirm_create(tui, "quit", NULL,
+  tui_window_confirm_create(tui, "quit", false,
     (tui_rect_t) { 0 }, // Default values
     &tui_quit_window_event,
     "Do you want to quit?", "Yes", "No", TUI_NO
+  );
+
+  tui_window_text_create(tui, "size", true,
+    (tui_rect_t)
+    {
+      .w = (tui_size_t)
+      {
+        .type = TUI_SIZE_ABS,
+        .value.abs = w
+      },
+      .h = (tui_size_t)
+      {
+        .type = TUI_SIZE_ABS,
+        .value.abs = h
+      }
+    },
+    &tui_size_window_event,
+    "Resize terminal to fit this window",
+    false,
+    NULL,
+    TUI_POS_CENTER,
+    TUI_POS_CENTER
   );
 }
 
 /*
  * Create tui struct
  */
-tui_t* tui_create(void)
+tui_t* tui_create(int w, int h, tui_event_t event)
 {
   tui_t* tui = malloc(sizeof(tui_t));
 
@@ -1570,10 +1799,10 @@ tui_t* tui_create(void)
   {
     .w     = getmaxx(stdscr),
     .h     = getmaxy(stdscr),
-    .event = tui_event
+    .event = event
   };
 
-  tui_setup(tui);
+  tui_setup(tui, w, h);
 
   return tui;
 }
@@ -1596,6 +1825,10 @@ void tui_start(tui_t* tui)
   if (!tui) return;
 
   tui->is_running = true;
+
+  tui_active_window_set(tui, "size");
+
+  tui_render(tui);
 
   int key;
 

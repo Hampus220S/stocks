@@ -19,21 +19,21 @@ int main(int argc, char* argv[])
 
   tui_init();
 
-  tui_t* tui = tui_create();
+  tui_t* tui = tui_create(40, 26, NULL);
 
   tui_menu_t* menu = tui_menu_create(tui, "main", NULL);
 
-  tui_menu_window_text_create(menu, "info", "Info",
-    (tui_rect_t)
+  tui_menu_window_text_create(menu, "info1", true,
+   (tui_rect_t)
     {
       .w = (tui_size_t)
       {
-        .type = TUI_SIZE_REL,
+        .type = TUI_SIZE_NONE,
         .value.rel = 0.5
       },
       .h = (tui_size_t)
       {
-        .type = TUI_SIZE_REL,
+        .type = TUI_SIZE_NONE,
         .value.rel = 0.5
       },
       .xpos = TUI_POS_RIGHT,
@@ -41,7 +41,33 @@ int main(int argc, char* argv[])
     },
     NULL,
     text,
+    false,
+    "Close",
     TUI_POS_CENTER,
+    TUI_POS_CENTER
+  );
+
+  tui_menu_window_text_create(menu, "info2", true,
+    (tui_rect_t)
+    {
+      .w = (tui_size_t)
+      {
+        .type = TUI_SIZE_NONE,
+        .value.rel = 0.5
+      },
+      .h = (tui_size_t)
+      {
+        .type = TUI_SIZE_NONE,
+        .value.rel = 0.5
+      },
+      .xpos = TUI_POS_LEFT,
+      .ypos = TUI_POS_BOTTOM
+    },
+    NULL,
+    text,
+    true,
+    "Done",
+    TUI_POS_RIGHT,
     TUI_POS_CENTER
   );
 
