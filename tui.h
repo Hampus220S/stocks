@@ -33,18 +33,40 @@
 #define KEY_TAB   9
 
 /*
+ * Normal rect struct with absolute values
+ */
+typedef struct tui_rect_abs_t
+{
+  int w;
+  int h;
+  int x;
+  int y;
+} tui_rect_abs_t;
+
+/*
  * TUI position
  *
  * By default, window will be centered
  */
 typedef enum tui_pos_t
 {
-  TUI_POS_CENTER,
-  TUI_POS_LEFT,
-  TUI_POS_RIGHT,
-  TUI_POS_TOP,
-  TUI_POS_BOTTOM
+  TUI_POS_CENTER = 0,
+  TUI_POS_LEFT   = 1,
+  TUI_POS_TOP    = 1,
+  TUI_POS_RIGHT  = 2,
+  TUI_POS_BOTTOM = 2
 } tui_pos_t;
+
+/*
+ * Position factor converts tui_pos_t to
+ *
+ * LEFT   : 0
+ * TOP    : 0
+ * CENTER : 1
+ * RIGHT  : 2
+ * BOTTOM : 2
+ */
+const int TUI_POS_FACTOR[] = { 1, 0, 2 };
 
 /*
  * TUI size type
@@ -147,6 +169,7 @@ typedef struct tui_window_t
   char*              name;   // ID name
   char*              title;  // Displaying title
   tui_rect_t         rect;
+  tui_rect_abs_t     abs_rect;
   WINDOW*            window;
   tui_window_event_t event;
   tui_t*             tui;
@@ -264,6 +287,8 @@ typedef struct tui_menu_t
  */
 typedef struct tui_t
 {
+  int            w;
+  int            h;
   tui_menu_t**   menus;
   size_t         menu_count;
   tui_menu_t*    menu;         // Current menu
@@ -365,12 +390,19 @@ static inline void tui_window_event(tui_window_t* window, int key)
 /*
  * Quit event - triggered from quit confirm window
  */
-static inline void* tui_quit_window_event(tui_window_t* window, int key)
+static inline void* tui_quit_window_event(tui_window_t* head, int key)
 {
+  info_print("tui_quit_window_event : %d", key);
+
+  tui_window_confirm_t* window = (tui_window_confirm_t*) head;
+
   switch (key)
   {
-    case KEY_ENTER:
-      window->tui->is_running = false;
+    case KEY_ENTR:
+      if (window->answer == TUI_YES)
+      {
+        head->tui->is_running = false;
+      }
       break;
 
     default:
@@ -412,8 +444,19 @@ static inline void* tui_event(tui_t* tui, int key)
  */
 static inline void tui_setup(tui_t* tui)
 {
+  /*
   tui_window_confirm_create(tui, "quit", NULL,
     (tui_rect_t) { 0 }, // Default values
+    &tui_quit_window_event,
+    "Do you want to quit?", "Yes", "No", TUI_NO
+  );
+  */
+
+  tui_window_confirm_create(tui, "quit", NULL,
+    (tui_rect_t)
+    {
+
+    },
     &tui_quit_window_event,
     "Do you want to quit?", "Yes", "No", TUI_NO
   );
@@ -430,6 +473,14 @@ tui_t* tui_create(void)
   {
     return NULL;
   }
+
+  memset(tui, 0, sizeof(tui_t));
+
+  *tui = (tui_t)
+  {
+    .w = getmaxx(stdscr),
+    .h = getmaxy(stdscr)
+  };
 
   tui_setup(tui);
 
@@ -449,7 +500,7 @@ void tui_free(tui_t** tui)
 }
 
 /*
- *
+ * Append window to TUI
  */
 static inline int tui_window_append(tui_t* tui, tui_window_t* window)
 {
@@ -470,18 +521,20 @@ static inline int tui_window_append(tui_t* tui, tui_window_t* window)
 }
 
 /*
- *
- */
-
-
-/*
  * Create ncurses WINDOW* for tui_window_t
  */
-static inline WINDOW* tui_ncurses_window_create(tui_window_t* window)
+static inline WINDOW* tui_ncurses_window_create(int w, int h, int x, int y)
 {
-  // return newwin(h, w, y, x);
-  
-  return NULL;
+  WINDOW* window = newwin(h, w, y, x);
+
+  if (!window)
+  {
+    return NULL;
+  }
+
+  keypad(window, TRUE);
+
+  return window;
 }
 
 /*
@@ -521,17 +574,6 @@ static inline int tui_size_abs_get(int parent_size, tui_size_t tui_size)
       return 0;
   }
 }
-
-/*
- *
- */
-typedef struct tui_rect_abs_t
-{
-  int w;
-  int h;
-  int x;
-  int y;
-} tui_rect_abs_t;
 
 /*
  * Get the absolute value of width, regarding left and right margins
@@ -715,6 +757,58 @@ static inline void tui_text_ws_get(int* ws, char* text, int h)
 }
 
 /*
+ * Render text in rect in window
+ *
+ * xpos determines if the text is aligned to the left, centered or right
+ */
+static inline void tui_text_render(WINDOW* window, char* text, tui_rect_abs_t rect, tui_pos_t xpos, tui_pos_t ypos)
+{
+  int h = tui_text_h_get(text, rect.w);
+
+  int ws[h];
+
+  tui_text_ws_get(ws, text, h);
+
+
+  size_t length = strlen(text);
+
+  int line_index = 0;
+  int line_w = 0;
+
+  int y = 0;
+
+  for (size_t index = 0; index < length; index++)
+  {
+    char letter = text[index];
+
+    if (letter == ' ' && line_w == 0)
+    {
+      line_w = 0;
+    }
+    else if (line_w >= ws[line_index])
+    {
+      line_index++;
+
+      line_w = 0;
+
+      y++;
+    }
+    else
+    {
+      int x_shift = TUI_POS_FACTOR[xpos] * (rect.w - ws[line_index]) / 2;
+
+      int y_shift = TUI_POS_FACTOR[ypos] * (rect.h - h) / 2;
+
+      // info_print("rect.h: %d y_shift: %d", rect.h, y_shift);
+
+      mvwprintw(window, rect.y + y_shift + y, rect.x + x_shift + line_w, "%c", letter);
+
+      line_w++;
+    }
+  }
+}
+
+/*
  * Get x position of tui_rect_abs_t
  */
 static inline int tui_rect_abs_x_get(tui_pos_t pos, int l, int r, int parent_w, int w)
@@ -765,14 +859,16 @@ static inline tui_rect_abs_t tui_window_confirm_rect_abs_get(tui_window_confirm_
   int w = tui_rect_abs_w_get(l, r, parent_w, rect.w);
   int h = tui_rect_abs_h_get(t, b, parent_h, rect.h);
 
+  int text_w = MAX(1, w - 4);
+  int text_h = MAX(1, h - 4);
+
   // If size is not specified, height is sat to minimum
   if (rect.w.type == TUI_SIZE_NONE && rect.h.type == TUI_SIZE_NONE)
   {
-    h = 5;
-  }
+    int text_len = strlen(window->prompt);
 
-  int text_w = MAX(0, w - 2);
-  int text_h = MAX(0, h - 4);
+    text_h = tui_text_h_get(window->prompt, text_len);
+  }
 
   if (rect.w.type == TUI_SIZE_NONE)
   {
@@ -783,7 +879,7 @@ static inline tui_rect_abs_t tui_window_confirm_rect_abs_get(tui_window_confirm_
     text_h = tui_text_h_get(window->prompt, text_w);
   }
 
-  w = text_w + 2;
+  w = text_w + 4;
   h = text_h + 4;
 
   int x = tui_rect_abs_x_get(rect.xpos, l, r, parent_w, w);
@@ -815,9 +911,7 @@ static inline tui_window_confirm_t* _tui_window_confirm_create(tui_t* tui, char*
     .title = title,
     .rect  = rect,
     .event = event,
-    .tui   = tui,
-    .parent_type = TUI_PARENT_TUI,
-    .parent.tui  = tui
+    .tui   = tui
   };
 
   *window = (tui_window_confirm_t)
@@ -831,7 +925,7 @@ static inline tui_window_confirm_t* _tui_window_confirm_create(tui_t* tui, char*
     .text_no_len  = strlen(text_no),
     .answer       = answer
   };
-  
+
   return window;
 }
 
@@ -853,6 +947,16 @@ tui_window_confirm_t* tui_window_confirm_create(tui_t* tui, char* name, char* ti
   {
     return NULL;
   }
+
+  // Assign window parent
+  window->head.parent_type = TUI_PARENT_TUI;
+  window->head.parent.tui  = tui;
+
+  tui_rect_abs_t abs_rect = tui_window_confirm_rect_abs_get(window, tui->w, tui->h);
+
+  // Assign window ncurses window
+  window->head.abs_rect = abs_rect;
+  window->head.window   = tui_ncurses_window_create(abs_rect.w, abs_rect.h, abs_rect.x, abs_rect.y);
 
   if (tui_window_append(tui, (tui_window_t*) window) != 0)
   {
@@ -969,6 +1073,9 @@ int tui_window_confirm_delete(tui_t* tui, char* name)
  */
 static inline void tui_window_event_trigger(tui_window_t* window, int key)
 {
+  // Trigger default behavior window event
+  tui_window_event(window, key);
+
   if (window->event)
   {
     window->event(window, key);
@@ -1039,17 +1146,80 @@ static inline void tui_menu_render(tui_menu_t* menu)
 }
 
 /*
+ *
+ */
+static inline void tui_window_confirm_render(tui_window_confirm_t* window)
+{
+  tui_window_t head = window->head;
+
+  curs_set(0);
+
+  werase(head.window);
+
+
+  tui_rect_abs_t abs_rect = head.abs_rect;
+
+
+  tui_rect_abs_t text_rect =
+  {
+    .x = 1,
+    .y = 1,
+    .w = abs_rect.w - 4,
+    .h = abs_rect.h - 4
+  };
+
+  box(head.window, 0, 0);
+
+  tui_text_render(head.window, window->prompt, text_rect, TUI_POS_CENTER, TUI_POS_CENTER);
+
+
+  int answer_len = (window->text_yes_len + 1 + window->text_no_len);
+
+  int x_shift = (head.abs_rect.w - answer_len) / 2;
+
+  wmove(head.window, head.abs_rect.h - 2, x_shift);
+
+
+  if (window->answer == TUI_YES)
+  {
+    wattron(head.window, A_REVERSE);
+  }
+
+  wprintw(head.window, "%s", window->text_yes);
+
+  wattroff(head.window, A_REVERSE);
+
+
+  waddch(head.window, ' ');
+
+  
+  if (window->answer == TUI_NO)
+  {
+    wattron(head.window, A_REVERSE);
+  }
+
+  wprintw(head.window, "%s", window->text_no);
+
+  wattroff(head.window, A_REVERSE);
+
+
+  wrefresh(head.window);
+}
+
+/*
  * Render TUI window
  */
 static inline void tui_window_render(tui_window_t* window)
 {
-  curs_set(0);
+  switch (window->type)
+  {
+    case TUI_WINDOW_CONFIRM:
+      tui_window_confirm_render((tui_window_confirm_t*) window);
+      break;
 
-  werase(window->window);
-
-  mvwprintw(window->window, 1, 2, "HEJ");
-
-  wrefresh(window->window);
+    default:
+      break;
+  }
 }
 
 /*
