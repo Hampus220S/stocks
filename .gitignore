@@ -1,2 +1,8 @@
-program
-debug.log
+*
+!.gitignore
+!README.md
+!NOTES.md
+!debug.h
+!tui.h
+!makefile
+!program.c

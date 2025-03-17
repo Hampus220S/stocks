@@ -375,7 +375,7 @@ static inline int tui_menu_append(tui_t* tui, tui_menu_t* menu)
 
   if (!temp_menus)
   {
-    errno = ENOMEM; // Out of memory
+    info_print("tui_menu_append realloc: %s", strerror(errno));
 
     return 1;
   }
@@ -388,43 +388,24 @@ static inline int tui_menu_append(tui_t* tui, tui_menu_t* menu)
 }
 
 /*
- * Append window to TUI
+ * Append window to array of windows
  */
-static inline int tui_window_append(tui_t* tui, tui_window_t* window)
+static inline int tui_windows_window_append(tui_window_t*** windows, size_t* count, tui_window_t* window)
 {
-  tui_window_t** temp_windows = realloc(tui->windows, sizeof(tui_window_t*) * (tui->window_count + 1));
+  tui_window_t** temp_windows = realloc(*windows, sizeof(tui_window_t*) * (*count + 1));
 
   if (!temp_windows)
   {
-    errno = ENOMEM; // Out of memory
+    info_print("tui_windows_window_append realloc: %s", strerror(errno));
 
     return 1;
   }
 
-  tui->windows = temp_windows;
+  *windows = temp_windows;
 
-  tui->windows[tui->window_count++] = window;
+  (*windows)[*count] = window;
 
-  return 0;
-}
-
-/*
- * Append window to menu
- */
-static inline int tui_menu_window_append(tui_menu_t* menu, tui_window_t* window)
-{
-  tui_window_t** temp_windows = realloc(menu->windows, sizeof(tui_window_t*) * (menu->window_count + 1));
-
-  if (!temp_windows)
-  {
-    errno = ENOMEM; // Out of memory
-
-    return 1;
-  }
-
-  menu->windows = temp_windows;
-
-  menu->windows[menu->window_count++] = window;
+  (*count)++;
 
   return 0;
 }
@@ -970,7 +951,7 @@ tui_window_confirm_t* tui_window_confirm_create(tui_t* tui, char* name, bool is_
   window->head.abs_rect = abs_rect;
   window->head.window   = tui_ncurses_window_create(abs_rect.w, abs_rect.h, abs_rect.x, abs_rect.y);
 
-  if (tui_window_append(tui, (tui_window_t*) window) != 0)
+  if (tui_windows_window_append(&tui->windows, &tui->window_count, (tui_window_t*) window) != 0)
   {
     free(window);
 
@@ -1009,7 +990,7 @@ tui_window_text_t* tui_window_text_create(tui_t* tui, char* name, bool is_visabl
   window->head.abs_rect = abs_rect;
   window->head.window   = tui_ncurses_window_create(abs_rect.w, abs_rect.h, abs_rect.x, abs_rect.y);
 
-  if (tui_window_append(tui, (tui_window_t*) window) != 0)
+  if (tui_windows_window_append(&tui->windows, &tui->window_count, (tui_window_t*) window) != 0)
   {
     free(window);
 
@@ -1048,7 +1029,7 @@ tui_window_text_t* tui_menu_window_text_create(tui_menu_t* menu, char* name, boo
   window->head.abs_rect = abs_rect;
   window->head.window   = tui_ncurses_window_create(abs_rect.w, abs_rect.h, abs_rect.x, abs_rect.y);
 
-  if (tui_menu_window_append(menu, (tui_window_t*) window) != 0)
+  if (tui_windows_window_append(&menu->windows, &menu->window_count, (tui_window_t*) window) != 0)
   {
     free(window);
 
@@ -1121,41 +1102,13 @@ static inline void tui_window_text_free(tui_window_text_t** window)
 }
 
 /*
- * Get index of menu window by name
+ * Get index of window in array of windows by name
  */
-static inline ssize_t tui_menu_window_index_get(tui_menu_t* menu, char* name)
+static inline ssize_t tui_windows_window_index_get(tui_window_t** windows, size_t count, char* name)
 {
-  if (!menu || !name)
+  for (ssize_t index = 0; index < count; index++)
   {
-    return -1;
-  }
-
-  for (ssize_t index = 0; index < menu->window_count; index++)
-  {
-    tui_window_t* window = menu->windows[index];
-
-    if (window && strcmp(window->name, name) == 0)
-    {
-      return index;
-    }
-  }
-
-  return -1;
-}
-
-/*
- * Get index of TUI window by name
- */
-static inline ssize_t tui_window_index_get(tui_t* tui, char* name)
-{
-  if (!tui || !name)
-  {
-    return -1;
-  }
-
-  for (ssize_t index = 0; index < tui->window_count; index++)
-  {
-    tui_window_t* window = tui->windows[index];
+    tui_window_t* window = windows[index];
 
     if (window && strcmp(window->name, name) == 0)
     {
@@ -1273,7 +1226,7 @@ static inline void tui_active_menu_set(tui_t* tui, char* name)
  */
 static inline void tui_active_window_set(tui_t* tui, char* name)
 {
-  ssize_t index = tui_window_index_get(tui, name);
+  ssize_t index = tui_windows_window_index_get(tui->windows, tui->window_count, name);
 
   if (index != -1)
   {
@@ -1316,43 +1269,25 @@ static inline void tui_active_window_unset(tui_t* tui)
 }
 
 /*
- * Delete TUI confirm window
+ * Remove window from array of windows
  */
-int tui_window_confirm_delete(tui_t* tui, char* name)
+static inline void tui_windows_window_remove(tui_window_t*** windows, size_t* count, size_t index)
 {
-  if (!tui || !name)
+  info_print("_remove windows:%d &count:%d count:%ld", windows, count, *count);
+
+  for (size_t index = index; index < (*count - 1); index++)
   {
-    return 1;
+    (*windows)[index] = (*windows)[index + 1];
   }
 
-  ssize_t window_index = tui_window_index_get(tui, name);
+  tui_window_t** temp_windows = realloc(*windows, sizeof(tui_window_t*) * (*count - 1));
 
-  if (window_index == -1)
+  (*count)--;
+
+  if (temp_windows)
   {
-    return 2;
+    *windows = temp_windows;
   }
-
-  tui_window_t* window = tui->windows[window_index];
-
-  tui_window_confirm_free((tui_window_confirm_t**) &window);
-
-
-  for (size_t index = window_index; index < (tui->window_count - 1); index++)
-  {
-    tui->windows[index] = tui->windows[index + 1];
-  }
-
-  tui_window_t** temp_windows = realloc(tui->windows, sizeof(tui_window_t*) * (tui->window_count - 1));
-
-  if (!temp_windows)
-  {
-    // Here, the window is destroyed, but the windows array isn't shrunk
-    return 3;
-  }
-
-  tui->windows = temp_windows;
-
-  return 0;
 }
 
 /*
@@ -1378,18 +1313,57 @@ static inline void tui_window_free(tui_window_t** window)
 }
 
 /*
+ * Delete TUI window
+ */
+int tui_window_delete(tui_t* tui, char* name)
+{
+  if (!tui || !name)
+  {
+    return 1;
+  }
+
+  ssize_t index = tui_windows_window_index_get(tui->windows, tui->window_count, name);
+
+  if (index == -1)
+  {
+    return 2;
+  }
+
+  tui_window_t* window = tui->windows[index];
+
+  tui_window_free(&window);
+
+  tui_windows_window_remove(&tui->windows, &tui->window_count, index);
+
+  return 0;
+}
+
+/*
+ * Free windows
+ */
+static inline void tui_windows_free(tui_window_t*** windows, size_t* count)
+{
+  for (size_t index = 0; index < *count; index++)
+  {
+    tui_window_t* window = (*windows)[index];
+
+    tui_window_free(&window);
+  }
+
+  free(*windows);
+
+  *windows = NULL;
+  *count = 0;
+}
+
+/*
  * Free menu struct
  */
 static inline void tui_menu_free(tui_menu_t** menu)
 {
   if (!menu || !(*menu)) return;
 
-  for (size_t index = 0; index < (*menu)->window_count; index++)
-  {
-    tui_window_t* window = (*menu)->windows[index];
-
-    tui_window_free(&window);
-  }
+  tui_windows_free(&(*menu)->windows, &(*menu)->window_count);
 
   free(*menu);
 
@@ -1410,12 +1384,9 @@ void tui_delete(tui_t** tui)
     tui_menu_free(&menu);
   }
 
-  for (size_t index = 0; index < (*tui)->window_count; index++)
-  {
-    tui_window_t* window = (*tui)->windows[index];
+  free((*tui)->menus);
 
-    tui_window_free(&window);
-  }
+  tui_windows_free(&(*tui)->windows, &(*tui)->window_count);
 
   free(*tui);
 
@@ -1695,6 +1666,14 @@ static inline void tui_resize(tui_t* tui)
 }
 
 /*
+ * Tab between windows in TUI
+ */
+static inline void tui_tab(tui_t* tui, bool reverse)
+{
+  info_print("tui_tab");
+}
+
+/*
  * Event
  */
 
@@ -1746,6 +1725,8 @@ static inline void tui_size_window_event(tui_window_t* head, int key)
     head->is_visable = false;
 
     tui_active_window_unset(head->tui);
+
+    tui_window_delete(head->tui, head->name);
   }
 }
 
@@ -1789,6 +1770,14 @@ static inline void tui_event(tui_t* tui, int key)
       tui_resize(tui);
       break;
 
+    case KEY_TAB:
+      tui_tab(tui, false);
+      break;
+
+    case KEY_BTAB:
+      tui_tab(tui, true);
+      break;
+
     default:
       break;
   }
@@ -1811,13 +1800,18 @@ static inline void tui_event_trigger(tui_t* tui, int key)
       window->event(window, key);
     }
 
-    if (window->parent_type == TUI_PARENT_MENU)
-    {
-      tui_menu_t* menu = window->parent.menu;
+    window = tui->window;
 
-      if (menu->event)
+    if (window)
+    {
+      if (window->parent_type == TUI_PARENT_MENU)
       {
-        menu->event(menu, key);
+        tui_menu_t* menu = window->parent.menu;
+
+        if (menu->event)
+        {
+          menu->event(menu, key);
+        }
       }
     }
   }
