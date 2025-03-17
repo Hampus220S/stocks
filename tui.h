@@ -181,6 +181,7 @@ typedef struct tui_window_t
   char*              name;
   bool               is_visable;
   bool               is_interact;
+  bool               is_locked;
   tui_rect_t         rect;
   tui_rect_abs_t     abs_rect;
   WINDOW*            window;
@@ -1261,11 +1262,11 @@ static inline void tui_active_window_set(tui_t* tui, char* name)
 /*
  * Remove window from array of windows
  */
-static inline void tui_windows_window_remove(tui_window_t*** windows, size_t* count, size_t index)
+static inline void tui_windows_window_remove(tui_window_t*** windows, size_t* count, size_t remove_index)
 {
   info_print("_remove windows:%d &count:%d count:%ld", windows, count, *count);
 
-  for (size_t index = index; index < (*count - 1); index++)
+  for (size_t index = remove_index; index < (*count - 1); index++)
   {
     (*windows)[index] = (*windows)[index + 1];
   }
@@ -1722,6 +1723,16 @@ static inline void tui_tab(tui_t* tui, bool reverse)
 
   info_print("tab_window_count: %d", tui->tab_window_count);
 
+  if (tui->window)
+  {
+    if (tui->window->is_locked)
+    {
+      info_print("Cannot tab: window is locked");
+
+      return;
+    }
+  }
+
   // 1. Rotate tab windows to new active window
   for (size_t index = 1; index < tui->tab_window_count; index++)
   {
@@ -1790,16 +1801,6 @@ static inline void tui_window_event(tui_window_t* window, int key)
 }
 
 /*
- * Close window by making it invisable and tabbing to next window
- */
-static inline void tui_window_close(tui_window_t* window)
-{
-  window->is_visable = false;
-
-  tui_tab(window->tui, false);
-}
-
-/*
  * Handle key press from size window
  *
  * Close the size window on enter
@@ -1808,9 +1809,11 @@ static inline void tui_size_window_event(tui_window_t* head, int key)
 {
   if (key == KEY_ENTR)
   {
-    tui_window_close(head);
-
     tui_window_delete(head->tui, head->name);
+
+    head->tui->window = NULL;
+
+    tui_tab(head->tui, false);
   }
 }
 
@@ -1830,7 +1833,11 @@ static inline void tui_quit_window_event(tui_window_t* head, int key)
       }
       else
       {
-        tui_window_close(head);
+        head->tui->window = NULL;
+
+        head->is_visable = false;
+
+        tui_tab(head->tui, false);
       }
       break;
 
@@ -1913,13 +1920,15 @@ static inline void tui_event_trigger(tui_t* tui, int key)
  */
 static inline void tui_setup(tui_t* tui, int w, int h)
 {
-  tui_window_confirm_create(tui, "quit", false,
+  tui_window_confirm_t* quit_window = tui_window_confirm_create(tui, "quit", false,
     (tui_rect_t) { 0 }, // Default values
     &tui_quit_window_event,
     "Do you want to quit?", "Yes", "No", TUI_NO
   );
 
-  tui_window_text_create(tui, "size", false,
+  quit_window->head.is_locked = true;
+
+  tui_window_text_t* size_window = tui_window_text_create(tui, "size", false,
     (tui_rect_t)
     {
       .w = (tui_size_t)
@@ -1940,6 +1949,8 @@ static inline void tui_setup(tui_t* tui, int w, int h)
     TUI_POS_CENTER,
     TUI_POS_CENTER
   );
+
+  size_window->head.is_locked = true;
 }
 
 /*
