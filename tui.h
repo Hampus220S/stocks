@@ -162,13 +162,13 @@ typedef enum tui_parent_type_t
  * Definitions of event function signatures
  */
 
-typedef void* (*tui_window_list_item_event_t)(tui_window_list_item_t* item, int key);
+typedef void (*tui_window_list_item_event_t)(tui_window_list_item_t* item, int key);
 
-typedef void* (*tui_window_event_t)(tui_window_t* window, int key);
+typedef void (*tui_window_event_t)(tui_window_t* window, int key);
 
-typedef void* (*tui_menu_event_t)(tui_menu_t* menu, int key);
+typedef void (*tui_menu_event_t)(tui_menu_t* menu, int key);
 
-typedef void* (*tui_event_t)(tui_t* tui, int key);
+typedef void (*tui_event_t)(tui_t* tui, int key);
 
 /*
  * General window struct, same for all windows
@@ -444,6 +444,16 @@ static inline WINDOW* tui_ncurses_window_create(int w, int h, int x, int y)
   keypad(window, TRUE);
 
   return window;
+}
+
+/*
+ * Resize ncurses WINDOW*
+ */
+static inline void tui_ncurses_window_resize(WINDOW* window, int w, int h, int x, int y)
+{
+  wresize(window, h, w);
+
+  mvwin(window, y, x);
 }
 
 /*
@@ -1605,6 +1615,86 @@ static inline void tui_render(tui_t* tui)
 }
 
 /*
+ * Resize text window
+ */
+static inline void tui_window_text_resize(tui_window_text_t* window, int parent_w, int parent_h)
+{
+  tui_rect_abs_t abs_rect = tui_window_text_rect_abs_get(window, parent_w, parent_h);
+
+  window->head.abs_rect = abs_rect;
+
+  info_print("window_text w:%d h:%d x:%d y:%d",
+      abs_rect.w, abs_rect.h, abs_rect.x, abs_rect.y);
+
+  tui_ncurses_window_resize(window->head.window, abs_rect.w, abs_rect.h, abs_rect.x, abs_rect.y);
+}
+
+/*
+ * Resize confirm window
+ */
+static inline void tui_window_confirm_resize(tui_window_confirm_t* window, int parent_w, int parent_h)
+{
+  tui_rect_abs_t abs_rect = tui_window_confirm_rect_abs_get(window, parent_w, parent_h);
+
+  window->head.abs_rect = abs_rect;
+
+  tui_ncurses_window_resize(window->head.window, abs_rect.w, abs_rect.h, abs_rect.x, abs_rect.y);
+}
+
+/*
+ * Resize window
+ */
+static inline void tui_window_resize(tui_window_t* window, int parent_w, int parent_h)
+{
+  switch (window->type)
+  {
+    case TUI_WINDOW_CONFIRM:
+      tui_window_confirm_resize((tui_window_confirm_t*) window, parent_w, parent_h);
+      break;
+
+    case TUI_WINDOW_TEXT:
+      tui_window_text_resize((tui_window_text_t*) window, parent_w, parent_h);
+      break;
+
+    default:
+      break;
+  }
+}
+
+/*
+ * Resize windows
+ */
+static inline void tui_windows_resize(tui_window_t** windows, size_t count, int parent_w, int parent_h)
+{
+  for (size_t index = 0; index < count; index++)
+  {
+    tui_window_t* window = windows[index];
+
+    tui_window_resize(window, parent_w, parent_h);
+  }
+}
+
+/*
+ * Resize TUI based on terminal new size
+ */
+static inline void tui_resize(tui_t* tui)
+{
+  tui->w = getmaxx(stdscr);
+  tui->h = getmaxy(stdscr);
+
+  info_print("Resize: %dx%d", tui->w, tui->h);
+
+  tui_windows_resize(tui->windows, tui->window_count, tui->w, tui->h);
+
+  for (size_t index = 0; index < tui->menu_count; index++)
+  {
+    tui_menu_t* menu = tui->menus[index];
+
+    tui_windows_resize(menu->windows, menu->window_count, tui->w, tui->h);
+  }
+}
+
+/*
  * Event
  */
 
@@ -1645,31 +1735,24 @@ static inline void tui_window_event(tui_window_t* window, int key)
 }
 
 /*
- * Size event - triggered from size text window
+ * Handle key press from size window
+ *
+ * Close the size window on any keypress except resize
  */
-static inline void* tui_size_window_event(tui_window_t* head, int key)
+static inline void tui_size_window_event(tui_window_t* head, int key)
 {
-  tui_window_text_t* window = (tui_window_text_t*) head;
-
-  switch (key)
+  if (key != KEY_RESIZE)
   {
-    case KEY_ENTR:
-      head->is_visable = false;
+    head->is_visable = false;
 
-      tui_active_window_unset(head->tui);
-      break;
-
-    default:
-      break;
+    tui_active_window_unset(head->tui);
   }
-
-  return NULL;
 }
 
 /*
  * Quit event - triggered from quit confirm window
  */
-static inline void* tui_quit_window_event(tui_window_t* head, int key)
+static inline void tui_quit_window_event(tui_window_t* head, int key)
 {
   tui_window_confirm_t* window = (tui_window_confirm_t*) head;
 
@@ -1689,14 +1772,12 @@ static inline void* tui_quit_window_event(tui_window_t* head, int key)
     default:
       break;
   }
-
-  return NULL;
 }
 
 /*
  * Default behavior of TUI
  */
-static inline void* tui_event(tui_t* tui, int key)
+static inline void tui_event(tui_t* tui, int key)
 {
   switch (key)
   {
@@ -1704,11 +1785,13 @@ static inline void* tui_event(tui_t* tui, int key)
       tui_active_window_set(tui, "quit");
       break;
 
+    case KEY_RESIZE:
+      tui_resize(tui);
+      break;
+
     default:
       break;
   }
-
-  return NULL;
 }
 
 /*
