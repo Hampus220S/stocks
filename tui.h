@@ -300,9 +300,8 @@ typedef struct tui_menu_t
  * TUI struct containing menus
  *
  * Active menu and active window has shortcuts
- * The active window should be either TUI window or inside menu
  *
- * The first window in array is the active one
+ * tab_windows contain all current windows
  */
 typedef struct tui_t
 {
@@ -312,9 +311,11 @@ typedef struct tui_t
   size_t         menu_count;
   tui_window_t** windows;
   size_t         window_count;
-  tui_menu_t*    menu;         // Active menu
-  tui_window_t*  window;       // Active window
-  bool           is_running;   // TUI is running
+  tui_window_t** tab_windows;      // All interactive windows
+  size_t         tab_window_count;
+  tui_menu_t*    menu;             // Active menu
+  tui_window_t*  window;           // Active window
+  bool           is_running;       // TUI is running
   tui_event_t    event;
 } tui_t;
 
@@ -602,8 +603,6 @@ static inline void tui_text_ws_get(int* ws, char* text, int h)
 {
   int max_w = tui_text_w_get(text, h);
 
-  info_print("max_w: %d\n", max_w);
-
   size_t length = strlen(text);
 
   int line_index = 0;
@@ -863,18 +862,19 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, char* name,
 
   *window = (tui_window_text_t)
   {
-    .head           = head,
-    .text           = text,
-    .text_len       = strlen(text),
-    .is_interact    = is_interact,
-    .xpos           = xpos,
-    .ypos           = ypos
+    .head        = head,
+    .text        = text,
+    .text_len    = strlen(text),
+    .is_interact = is_interact,
+    .xpos        = xpos,
+    .ypos        = ypos
   };
 
-  if (text_close)
+  // Assign default value for text_close if missing
+  if (is_interact)
   {
-    window->text_close     = text_close;
-    window->text_close_len = strlen(text_close);
+    window->text_close     = text_close ? text_close : "OK";
+    window->text_close_len = strlen(window->text_close);
   }
 
   return window;
@@ -1104,13 +1104,29 @@ static inline void tui_window_text_free(tui_window_text_t** window)
 /*
  * Get index of window in array of windows by name
  */
-static inline ssize_t tui_windows_window_index_get(tui_window_t** windows, size_t count, char* name)
+static inline ssize_t tui_windows_name_index_get(tui_window_t** windows, size_t count, char* name)
 {
   for (ssize_t index = 0; index < count; index++)
   {
     tui_window_t* window = windows[index];
 
     if (window && strcmp(window->name, name) == 0)
+    {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+/*
+ * Get index of window in array of windows
+ */
+static inline ssize_t tui_windows_window_index_get(tui_window_t** windows, size_t count, tui_window_t* window)
+{
+  for (ssize_t index = 0; index < count; index++)
+  {
+    if (windows[index] == window)
     {
       return index;
     }
@@ -1222,49 +1238,23 @@ static inline void tui_active_menu_set(tui_t* tui, char* name)
 }
 
 /*
- * Set TUI active window
+ * Set TUI active window to window by name
+ *
+ * The active window is chosen from tab windows
  */
 static inline void tui_active_window_set(tui_t* tui, char* name)
 {
-  ssize_t index = tui_windows_window_index_get(tui->windows, tui->window_count, name);
+  ssize_t index = tui_windows_name_index_get(tui->tab_windows, tui->tab_window_count, name);
 
   if (index != -1)
   {
-    tui_window_t* window = tui->windows[index];
+    tui_window_t* window = tui->tab_windows[index];
 
     window->is_visable = true;
 
     tui->window = window;
 
-    tui_windows_rotate(tui->windows, tui->window_count, index);
-  }
-}
-
-/*
- * Unset TUI active window
- *
- * Automatically set new active window
- */
-static inline void tui_active_window_unset(tui_t* tui)
-{
-  tui->window = NULL;
-
-  tui_window_t* window = tui_windows_active_window_get(tui->windows, tui->window_count);
-
-  if (window)
-  {
-    tui->window = window;
-  }
-  else
-  {
-    tui_menu_t* menu = tui->menu;
-
-    window = tui_windows_active_window_get(menu->windows, menu->window_count);
-
-    if (window)
-    {
-      tui->window = window;
-    }
+    tui_windows_rotate(tui->tab_windows, tui->tab_window_count, index);
   }
 }
 
@@ -1322,7 +1312,7 @@ int tui_window_delete(tui_t* tui, char* name)
     return 1;
   }
 
-  ssize_t index = tui_windows_window_index_get(tui->windows, tui->window_count, name);
+  ssize_t index = tui_windows_name_index_get(tui->windows, tui->window_count, name);
 
   if (index == -1)
   {
@@ -1387,6 +1377,8 @@ void tui_delete(tui_t** tui)
   free((*tui)->menus);
 
   tui_windows_free(&(*tui)->windows, &(*tui)->window_count);
+
+  free((*tui)->tab_windows);
 
   free(*tui);
 
@@ -1551,23 +1543,7 @@ static inline void tui_window_render(tui_window_t* window)
 }
 
 /*
- * Render windows
- */
-static inline void tui_windows_render(tui_window_t** windows, size_t count)
-{
-  for (size_t index = count; index-- > 0;)
-  {
-    tui_window_t* window = windows[index];
-
-    if (window->is_visable)
-    {
-      tui_window_render(window);
-    }
-  }
-}
-
-/*
- * Render TUI
+ * Render TUI by rendering all windows
  */
 static inline void tui_render(tui_t* tui)
 {
@@ -1575,14 +1551,15 @@ static inline void tui_render(tui_t* tui)
 
   refresh();
 
-  tui_menu_t* menu = tui->menu;
-
-  if (menu)
+  for (size_t index = tui->tab_window_count; index-- > 0;)
   {
-    tui_windows_render(menu->windows, menu->window_count);
-  }
+    tui_window_t* window = tui->tab_windows[index];
 
-  tui_windows_render(tui->windows, tui->window_count);
+    if (window->is_visable)
+    {
+      tui_window_render(window);
+    }
+  }
 }
 
 /*
@@ -1666,11 +1643,110 @@ static inline void tui_resize(tui_t* tui)
 }
 
 /*
+ * Fill TUI tab windows by appending child windows
+ */
+static inline void tui_tab_windows_fill(tui_t* tui, tui_window_t** windows, size_t count)
+{
+  for (size_t index = 0; index < count; index++)
+  {
+    tui_window_t* window = windows[index];
+
+    if (window->type == TUI_WINDOW_PARENT)
+    {
+      tui_window_parent_t* parent = (tui_window_parent_t*) window;
+
+      tui_tab_windows_fill(tui, parent->children, parent->child_count);
+    }
+    else
+    {
+      tui_windows_window_append(&tui->tab_windows, &tui->tab_window_count, window);
+    }
+  }
+}
+
+/*
+ * Update TUI tab windows array by cleaning it and filling it with windows
+ */
+static inline void tui_tab_windows_update(tui_t* tui)
+{
+  // 1. Clean existing tab windows
+  if (tui->tab_windows)
+  {
+    free(tui->tab_windows);
+
+    tui->tab_windows = NULL;
+  }
+
+  tui->tab_window_count = 0;
+
+  // 2. Fill tab windows with TUI windows and then menu windows
+  tui_tab_windows_fill(tui, tui->windows, tui->window_count);
+
+  tui_menu_t* menu = tui->menu;
+
+  if (menu)
+  {
+    tui_tab_windows_fill(tui, menu->windows, menu->window_count);
+  }
+
+  // 3. Assign new active window
+  if (tui->tab_window_count == 0)
+  {
+    tui->window = NULL;
+  }
+  else if (tui->window)
+  {
+    ssize_t index = tui_windows_window_index_get(tui->tab_windows, tui->tab_window_count, tui->window);
+
+    if (index != -1)
+    {
+      tui_windows_rotate(tui->tab_windows, tui->tab_window_count, index);
+    }
+    else
+    {
+      tui->window = NULL;
+    }
+  }
+  else
+  {
+    tui->window = tui->tab_windows[0];
+  }
+}
+
+/*
  * Tab between windows in TUI
  */
 static inline void tui_tab(tui_t* tui, bool reverse)
 {
   info_print("tui_tab");
+
+  info_print("tab_window_count: %d", tui->tab_window_count);
+
+  // 1. Rotate tab windows to new active window
+  for (size_t index = 1; index < tui->tab_window_count; index++)
+  {
+    size_t window_index = reverse ? (tui->tab_window_count - index) : index;
+
+    tui_window_t* window = tui->tab_windows[window_index];
+
+
+    if (window->is_visable && window->is_interact)
+    {
+      tui_windows_rotate(tui->tab_windows, tui->tab_window_count, window_index);
+
+      break;
+    }
+  }
+
+  // 2. Assign active window as the first tab window
+  if (tui->tab_window_count > 0)
+  {
+    tui->window = tui->tab_windows[0];
+  }
+  else
+  {
+    tui->window = NULL;
+  }
 }
 
 /*
@@ -1714,17 +1790,25 @@ static inline void tui_window_event(tui_window_t* window, int key)
 }
 
 /*
+ * Close window by making it invisable and tabbing to next window
+ */
+static inline void tui_window_close(tui_window_t* window)
+{
+  window->is_visable = false;
+
+  tui_tab(window->tui, false);
+}
+
+/*
  * Handle key press from size window
  *
- * Close the size window on any keypress except resize
+ * Close the size window on enter
  */
 static inline void tui_size_window_event(tui_window_t* head, int key)
 {
-  if (key != KEY_RESIZE)
+  if (key == KEY_ENTR)
   {
-    head->is_visable = false;
-
-    tui_active_window_unset(head->tui);
+    tui_window_close(head);
 
     tui_window_delete(head->tui, head->name);
   }
@@ -1740,13 +1824,13 @@ static inline void tui_quit_window_event(tui_window_t* head, int key)
   switch (key)
   {
     case KEY_ENTR:
-      head->is_visable = false;
-
-      tui_active_window_unset(head->tui);
-
       if (window->answer == TUI_YES)
       {
         head->tui->is_running = false;
+      }
+      else
+      {
+        tui_window_close(head);
       }
       break;
 
@@ -1835,7 +1919,7 @@ static inline void tui_setup(tui_t* tui, int w, int h)
     "Do you want to quit?", "Yes", "No", TUI_NO
   );
 
-  tui_window_text_create(tui, "size", true,
+  tui_window_text_create(tui, "size", false,
     (tui_rect_t)
     {
       .w = (tui_size_t)
@@ -1851,7 +1935,7 @@ static inline void tui_setup(tui_t* tui, int w, int h)
     },
     &tui_size_window_event,
     "Resize terminal to fit this window",
-    false,
+    true,
     NULL,
     TUI_POS_CENTER,
     TUI_POS_CENTER
@@ -1903,6 +1987,8 @@ void tui_start(tui_t* tui)
 
   tui->is_running = true;
 
+  tui_tab_windows_update(tui);
+
   tui_active_window_set(tui, "size");
 
   tui_render(tui);
@@ -1922,6 +2008,8 @@ void tui_start(tui_t* tui)
     }
 
     tui_event_trigger(tui, key);
+
+    tui_tab_windows_update(tui);
 
     tui_render(tui);
   }

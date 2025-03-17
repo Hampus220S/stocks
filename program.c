@@ -41,7 +41,7 @@ int main(int argc, char* argv[])
     },
     NULL,
     text,
-    false,
+    true,
     "Close",
     TUI_POS_CENTER,
     TUI_POS_CENTER
@@ -71,12 +71,31 @@ int main(int argc, char* argv[])
     TUI_POS_CENTER
   );
 
+  tui_window_text_create(tui, "data", true,
+    (tui_rect_t)
+    {
+      .w = (tui_size_t)
+      {
+        .type = TUI_SIZE_NONE,
+        .value.rel = 0.3
+      },
+      .h = (tui_size_t)
+      {
+        .type = TUI_SIZE_NONE,
+        .value.rel = 0.3
+      },
+      .xpos = TUI_POS_LEFT,
+      .ypos = TUI_POS_CENTER
+    },
+    NULL,
+    "Open terminal to close this window",
+    false,
+    NULL,
+    TUI_POS_LEFT,
+    TUI_POS_CENTER
+  );
+
   tui_active_menu_set(tui, "main");
-
-  info_print("tui->menu_count: %d", tui->menu_count);
-  info_print("tui->menu: %d", tui->menu);
-
-  info_print("menu->window_count: %d", menu->window_count);
 
   tui_start(tui); 
 
