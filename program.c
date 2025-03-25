@@ -42,6 +42,12 @@ int main(int argc, char* argv[])
   info_print("Created TUI");
 
 
+  tui_window_text_t* window = tui_window_text_create(tui, (tui_window_text_config_t)
+  {
+    .name = "key",
+    .string = "Hej",
+  });
+
   tui->is_running = true;
 
   clear();

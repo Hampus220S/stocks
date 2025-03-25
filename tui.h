@@ -713,7 +713,7 @@ static inline void tui_text_render(tui_window_text_t* window)
 {
   tui_window_t head = window->head;
 
-  tui_rect_t rect = head.rect;
+  tui_rect_t rect = head._rect;
 
   int h = tui_text_h_get(window->text, rect.w);
 
@@ -770,6 +770,8 @@ static inline void tui_text_render(tui_window_text_t* window)
  */
 static inline char* tui_text_extract(char* string)
 {
+  if (!string) return NULL;
+
   char* text = strdup(string);
 
   size_t length = strlen(string);
@@ -819,7 +821,10 @@ static inline void tui_window_text_render(tui_window_text_t* window)
 
   window->text = tui_text_extract(window->string);
 
-  tui_text_render(window);
+  if (window->text)
+  {
+    tui_text_render(window);
+  }
 
   wrefresh(head.window);
 }
@@ -919,9 +924,26 @@ tui_border_t* _tui_border_create(tui_color_t color, bool is_dashed)
 }
 
 /*
+ * Configuration struct for parent window
+ */
+typedef struct tui_window_parent_config_t
+{
+  char*              name;
+  tui_window_event_t event;
+  tui_rect_t         rect;
+  tui_color_t        color;
+  bool               is_visable;
+  tui_border_t*      border;
+  bool               has_padding;
+  tui_pos_t          pos;
+  tui_align_t        align;
+  bool               is_vertical;
+} tui_window_parent_config_t;
+
+/*
  * Just create tui_window_parent_t* object
  */
-static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, char* name, tui_window_event_t event, tui_rect_t rect, tui_color_t color, bool is_visable, tui_border_t* border, bool has_padding, tui_pos_t pos, tui_align_t align, bool is_vertical)
+static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_window_parent_config_t config)
 {
   tui_window_parent_t* window = malloc(sizeof(tui_window_parent_t));
 
@@ -935,30 +957,231 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, char* n
   tui_window_t head = (tui_window_t)
   {
     .is_text    = false,
-    .name       = name,
-    .rect       = rect,
-    .is_visable = is_visable,
-    .color      = color,
-    .event      = event,
+    .name       = config.name,
+    .rect       = config.rect,
+    .is_visable = config.is_visable,
+    .color      = config.color,
+    .event      = config.event,
     .tui        = tui
   };
 
   *window = (tui_window_parent_t)
   {
     .head        = head,
-    .has_padding = has_padding,
-    .border      = border,
-    .pos         = pos,
-    .align       = align,
-    .is_vertical = is_vertical
+    .has_padding = config.has_padding,
+    .border      = config.border,
+    .pos         = config.pos,
+    .align       = config.align,
+    .is_vertical = config.is_vertical
   };
 
   return window;
 }
 
 /*
- *
+ * Configuration struct for text window
  */
-// tui_window_parent_t* tui_window_create(tui_t* tui, )
+typedef struct tui_window_text_config_t
+{
+  char*              name;
+  tui_window_event_t event;
+  tui_rect_t         rect;
+  tui_color_t        color;
+  bool               is_visable;
+  char*              string;
+  tui_pos_t          pos;
+  tui_align_t        align;
+} tui_window_text_config_t;
+
+/*
+ * Just create tui_window_text_t* object
+ */
+static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_text_config_t config)
+{
+  tui_window_text_t* window = malloc(sizeof(tui_window_text_t));
+
+  if (!window)
+  {
+    return NULL;
+  }
+
+  memset(window, 0, sizeof(tui_window_text_t));
+
+  tui_window_t head = (tui_window_t)
+  {
+    .is_text    = true,
+    .name       = config.name,
+    .rect       = config.rect,
+    .is_visable = config.is_visable,
+    .color      = config.color,
+    .event      = config.event,
+    .tui        = tui
+  };
+
+  *window = (tui_window_text_t)
+  {
+    .head   = head,
+    .string = config.string,
+    .pos    = config.pos,
+    .align  = config.align
+  };
+
+  return window;
+}
+
+/*
+ * Append window to array of windows
+ */
+static inline int tui_windows_window_append(tui_window_t*** windows, size_t* count, tui_window_t* window)
+{
+  tui_window_t** temp_windows = realloc(*windows, sizeof(tui_window_t*) * (*count + 1));
+
+  if (!temp_windows)
+  {
+    info_print("tui_windows_window_append realloc: %s", strerror(errno));
+
+    return 1;
+  }
+
+  *windows = temp_windows;
+
+  (*windows)[*count] = window;
+
+  (*count)++;
+
+  return 0;
+}
+
+/*
+ * Create parent window and add it to tui
+ */
+tui_window_parent_t* tui_window_parent_create(tui_t* tui, tui_window_parent_config_t config)
+{
+  tui_window_parent_t* window = _tui_window_parent_create(tui, config);
+
+  if (!window)
+  {
+    return NULL;
+  }
+
+  if (tui_windows_window_append(&tui->windows, &tui->window_count, (tui_window_t*) window) != 0)
+  {
+    tui_window_parent_free(&window);
+
+    return NULL;
+  }
+
+  return window;
+}
+
+/*
+ * Create parent window and add it to menu
+ */
+tui_window_parent_t* tui_menu_window_parent_create(tui_menu_t* menu, tui_window_parent_config_t config)
+{
+  tui_window_parent_t* window = _tui_window_parent_create(menu->tui, config);
+
+  if (!window)
+  {
+    return NULL;
+  }
+
+  if (tui_windows_window_append(&menu->windows, &menu->window_count, (tui_window_t*) window) != 0)
+  {
+    tui_window_parent_free(&window);
+
+    return NULL;
+  }
+
+  return window;
+}
+
+/*
+ * Create parent window and add it to window as child
+ */
+tui_window_parent_t* tui_parent_child_parent_create(tui_window_parent_t* parent, tui_window_parent_config_t config)
+{
+  tui_window_parent_t* child = _tui_window_parent_create(parent->head.tui, config);
+
+  if (!child)
+  {
+    return NULL;
+  }
+
+  if (tui_windows_window_append(&parent->children, &parent->child_count, (tui_window_t*) child) != 0)
+  {
+    tui_window_parent_free(&child);
+
+    return NULL;
+  }
+
+  return child;
+}
+
+/*
+ * Create text window and add it to tui
+ */
+tui_window_text_t* tui_window_text_create(tui_t* tui, tui_window_text_config_t config)
+{
+  tui_window_text_t* window = _tui_window_text_create(tui, config);
+
+  if (!window)
+  {
+    return NULL;
+  }
+
+  if (tui_windows_window_append(&tui->windows, &tui->window_count, (tui_window_t*) window) != 0)
+  {
+    tui_window_text_free(&window);
+
+    return NULL;
+  }
+
+  return window;
+}
+
+/*
+ * Create text window and add it to menu
+ */
+tui_window_text_t* tui_menu_window_text_create(tui_menu_t* menu, tui_window_text_config_t config)
+{
+  tui_window_text_t* window = _tui_window_text_create(menu->tui, config);
+
+  if (!window)
+  {
+    return NULL;
+  }
+
+  if (tui_windows_window_append(&menu->windows, &menu->window_count, (tui_window_t*) window) != 0)
+  {
+    tui_window_text_free(&window);
+
+    return NULL;
+  }
+
+  return window;
+}
+
+/*
+ * Create text window and add it to window as child
+ */
+tui_window_text_t* tui_parent_child_text_create(tui_window_parent_t* parent, tui_window_text_config_t config)
+{
+  tui_window_text_t* child = _tui_window_text_create(parent->head.tui, config);
+
+  if (!child)
+  {
+    return NULL;
+  }
+
+  if (tui_windows_window_append(&parent->children, &parent->child_count, (tui_window_t*) child) != 0)
+  {
+    tui_window_text_free(&child);
+
+    return NULL;
+  }
+
+  return child;
+}
 
 #endif // TUI_IMPLEMENT
