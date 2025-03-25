@@ -26,7 +26,6 @@ int main(int argc, char* argv[])
 
   info_print("Initialized TUI");
 
-
   tui_t* tui = tui_create(NULL);
 
   if (!tui)
@@ -51,7 +50,7 @@ int main(int argc, char* argv[])
 
   int index = 0;
 
-  tui_color_on(tui, TUI_COLOR_WHITE, TUI_COLOR_GREEN);
+  tui_color_on(tui, (tui_color_t) { COLOR_WHITE, COLOR_GREEN });
 
   int key;
 
@@ -59,15 +58,15 @@ int main(int argc, char* argv[])
   {
     erase();
 
-    tui_color_t fg_color = index + 1;
+    short fg_color = index + 1;
 
     index = (index + 1) % 8;
 
-    tui_color_on(tui, fg_color, TUI_COLOR_NONE);
+    tui_color_on(tui, (tui_color_t) { fg_color, COLOR_NONE });
 
     mvprintw(1, 1, "KEY: %d", key);
 
-    tui_color_off(tui, fg_color, TUI_COLOR_NONE);
+    tui_color_off(tui, (tui_color_t) { fg_color, COLOR_NONE });
 
     if (key == KEY_CTRLS)
     {
@@ -80,7 +79,7 @@ int main(int argc, char* argv[])
     tui_render(tui);
   }
 
-  tui_color_off(tui, TUI_COLOR_WHITE, TUI_COLOR_GREEN);
+  tui_color_off(tui, (tui_color_t) { COLOR_WHITE, COLOR_GREEN });
 
 
   tui_delete(&tui);
