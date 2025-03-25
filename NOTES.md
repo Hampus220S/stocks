@@ -1,2 +1,2 @@
 # Notes
-- create function that calculcates parent rects before _render.
+- change _color_inherit to search for !_NONE colors up in hirarcy

@@ -42,38 +42,75 @@ int main(int argc, char* argv[])
   info_print("Created TUI");
 
 
-  tui_window_text_t* window = tui_window_text_create(tui, (tui_window_text_config_t)
+  tui_window_parent_t* parent = tui_window_parent_create(tui, (tui_window_parent_config_t)
+  {
+    .name = "parent",
+    .rect = (tui_rect_t)
+    {
+      .w = 20,
+      .h = 10,
+      .x = 3,
+      .y = 5
+    },
+    .color = (tui_color_t)
+    {
+      .bg = COLOR_BLUE,
+      .fg = COLOR_RED
+    },
+    .border = (tui_border_t)
+    {
+      .is_active = true
+    }
+  });
+
+  tui_parent_child_parent_create(parent, (tui_window_parent_config_t)
+  {
+    .name = "box",
+    .rect = (tui_rect_t)
+    {
+      .w = 10,
+      .h = 3,
+      .x = 3,
+      .y = 5
+    },
+    .color = (tui_color_t)
+    {
+      .bg = COLOR_BLUE,
+      .fg = COLOR_RED
+    },
+    .border = (tui_border_t)
+    {
+      .is_active = true
+    }
+  });
+
+  tui_parent_child_text_create(parent, (tui_window_text_config_t)
   {
     .name = "key",
     .string = "Hej",
+    .rect = (tui_rect_t)
+    {
+      .w = 6,
+      .h = 1,
+      .x = 3,
+      .y = 5
+    },
+    .color = (tui_color_t)
+    {
+      .bg = COLOR_BLUE,
+      .fg = COLOR_RED
+    }
   });
+
 
   tui->is_running = true;
 
-  clear();
-
   tui_render(tui);
-
-  int index = 0;
-
-  tui_color_on(tui, (tui_color_t) { COLOR_WHITE, COLOR_GREEN });
 
   int key;
 
   while (tui->is_running && (key = wgetch(stdscr)))
   {
-    erase();
-
-    short fg_color = index + 1;
-
-    index = (index + 1) % 8;
-
-    tui_color_on(tui, (tui_color_t) { fg_color, COLOR_NONE });
-
-    mvprintw(1, 1, "KEY: %d", key);
-
-    tui_color_off(tui, (tui_color_t) { fg_color, COLOR_NONE });
-
     if (key == KEY_CTRLS)
     {
       tui->is_running = false;
@@ -84,8 +121,6 @@ int main(int argc, char* argv[])
 
     tui_render(tui);
   }
-
-  tui_color_off(tui, (tui_color_t) { COLOR_WHITE, COLOR_GREEN });
 
 
   tui_delete(&tui);

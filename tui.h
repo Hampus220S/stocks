@@ -15,6 +15,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MIN(a, b) (((a) > (b)) ? (b) : (a))
+
 /*
  * Definitions of keys
  */
@@ -47,6 +50,17 @@ typedef bool (*tui_window_event_t)(tui_window_t* window, int key);
 typedef bool (*tui_menu_event_t)(tui_menu_t* menu, int key);
 
 typedef bool (*tui_event_t)(tui_t* tui, int key);
+
+/*
+ * Size = width and height
+ */
+typedef struct tui_size_t
+{
+  int  w;
+  int  h;
+} tui_size_t;
+
+const tui_size_t TUI_SIZE_NONE = { 0 };
 
 /*
  * Normal rect
@@ -85,6 +99,7 @@ const tui_color_t TUI_COLOR_NONE = { COLOR_NONE, COLOR_NONE };
  */
 typedef struct tui_border_t
 {
+  bool        is_active;
   tui_color_t color;
   bool        is_dashed;
 } tui_border_t;
@@ -186,7 +201,7 @@ typedef struct tui_window_parent_t
   tui_window_t** children;
   size_t         child_count;
   bool           is_vertical;
-  tui_border_t*  border;
+  tui_border_t   border;
   bool           has_padding;
   tui_pos_t      pos;
   tui_align_t    align;
@@ -262,39 +277,33 @@ static inline tui_color_t tui_color_inherit(tui_color_t last_color, tui_color_t 
 }
 
 /*
- * Turn on foreground and background color
+ * Set color of window
  */
-void tui_color_on(tui_t* tui, tui_color_t color)
+void tui_window_color_set(tui_window_t* window, tui_color_t color)
 {
+  tui_t* tui = window->tui;
+
   color = tui_color_inherit(tui->color, color);
 
-  attron(COLOR_PAIR(tui_ncurses_color_get(color)));
+  info_print("color_on: fg:%d bg:%d", color.fg, color.bg);
+
+  wattron(window->window, COLOR_PAIR(tui_ncurses_color_get(color)));
 
   tui->color = color;
 }
 
 /*
- * Turn off foreground and background color
+ * Fill window with color
  */
-void tui_color_off(tui_t* tui, tui_color_t color)
-{
-  color = tui_color_inherit(tui->color, color);
-
-  attroff(COLOR_PAIR(tui_ncurses_color_get(color)));
-
-  tui->color = TUI_COLOR_NONE;
-}
-
-/*
- * Fill window with it's background and foreground color
- */
-void tui_window_fill(tui_window_t* window)
+void tui_window_fill(tui_window_t* window, tui_color_t color)
 {
   tui_t* tui = window->tui;
 
-  tui_color_t color = tui_color_inherit(tui->color, window->color);
+  color = tui_color_inherit(tui->color, color);
 
-  attron(COLOR_PAIR(tui_ncurses_color_get(color)));
+  info_print("color_fill: fg:%d bg:%d", color.fg, color.bg);
+
+  wbkgd(window->window, COLOR_PAIR(tui_ncurses_color_get(color)));
 
   tui->color = color;
 }
@@ -304,15 +313,15 @@ void tui_window_fill(tui_window_t* window)
  */
 void tui_border_draw(tui_window_parent_t* window)
 {
-  tui_border_t* border = window->border;
+  tui_border_t border = window->border;
 
-  if (!border) return;
+  if (!border.is_active) return;
 
   tui_window_t head = window->head;
 
-  tui_color_on(head.tui, border->color);
+  tui_window_color_set((tui_window_t*) window, border.color);
 
-  if (border->is_dashed)
+  if (border.is_dashed)
   {
     box(head.window, 0, 0);
   }
@@ -320,8 +329,6 @@ void tui_border_draw(tui_window_parent_t* window)
   {
     box(head.window, 0, 0);
   }
-
-  tui_color_off(head.tui, border->color);
 }
 
 /*
@@ -387,9 +394,9 @@ void tui_quit(void)
 /*
  * Create ncurses WINDOW* for tui_window_t
  */
-static inline WINDOW* tui_ncurses_window_create(int w, int h, int x, int y)
+static inline WINDOW* tui_ncurses_window_create(tui_rect_t rect)
 {
-  WINDOW* window = newwin(h, w, y, x);
+  WINDOW* window = newwin(rect.h, rect.w, rect.y, rect.x);
 
   if (!window)
   {
@@ -404,11 +411,28 @@ static inline WINDOW* tui_ncurses_window_create(int w, int h, int x, int y)
 /*
  * Resize ncurses WINDOW*
  */
-static inline void tui_ncurses_window_resize(WINDOW* window, int w, int h, int x, int y)
+static inline WINDOW* tui_ncurses_window_resize(WINDOW* window, tui_rect_t rect)
 {
-  wresize(window, h, w);
+  wresize(window, rect.h, rect.w);
 
-  mvwin(window, y, x);
+  mvwin(window, rect.y, rect.x);
+
+  return window;
+}
+
+/*
+ * Update ncurses WINDOW*, either creating it or resizing it
+ */
+static inline WINDOW* tui_ncurses_window_update(WINDOW* window, tui_rect_t rect)
+{
+  if (window)
+  {
+    return tui_ncurses_window_resize(window, rect);
+  }
+  else
+  {
+    return tui_ncurses_window_create(rect);
+  }
 }
 
 /*
@@ -811,7 +835,9 @@ static inline void tui_window_text_render(tui_window_text_t* window)
   werase(head.window);
 
   // Draw background
-  tui_window_fill((tui_window_t*) window);
+  tui_window_fill((tui_window_t*) window, head.color);
+
+  info_print("tui_window_fill bg:%d", window->head.color.bg);
 
   // Draw text
   if (window->text)
@@ -836,25 +862,29 @@ static inline void tui_window_render(tui_window_t* window);
  */
 static inline void tui_window_parent_render(tui_window_parent_t* window)
 {
+  info_print("tui_window_parent_render");
+
   tui_window_t head = window->head;
 
   curs_set(0);
 
   werase(head.window);
 
+  info_print("tui_window_fill parent bg: %d", window->head.color.bg);
+
   // Draw background
-  tui_window_fill((tui_window_t*) window);
+  tui_window_fill((tui_window_t*) window, head.color);
 
   // Draw border
   tui_border_draw(window);
+
+  wrefresh(head.window);
 
   // Render children
   for (size_t index = 0; index < window->child_count; index++)
   {
     tui_window_render(window->children[index]);
   }
-
-  wrefresh(head.window);
 }
 
 /*
@@ -862,6 +892,15 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
  */
 static inline void tui_window_render(tui_window_t* window)
 {
+  // Unable to render if _rect is not calculated
+  if (window->_rect.is_none)
+  {
+    info_print("tui_window_render: _rect not calculated");
+    return;
+  }
+
+  tui_window_color_set(window, window->color);
+
   if (window->is_text)
   {
     tui_window_text_render((tui_window_text_t*) window);
@@ -884,11 +923,271 @@ static inline void tui_windows_render(tui_window_t** windows, size_t count)
 }
 
 /*
+ * Get the preliminary size of text window based on text
+ */
+static inline tui_size_t tui_window_text_size_get(tui_window_text_t* window)
+{
+  tui_window_t head = window->head;
+
+  if (!head.rect.is_none)
+  {
+    tui_rect_t rect = head.rect;
+
+    return (tui_size_t)
+    {
+      .w = rect.x + rect.w,
+      .h = rect.y + rect.h
+    };
+  }
+
+  if (!window->string || !window->text)
+  {
+    return TUI_SIZE_NONE;
+  }
+
+  int h = tui_text_h_get(window->text, head.tui->w);
+
+  int w = tui_text_w_get(window->text, h);
+
+  return (tui_size_t) { w, h };
+}
+
+static inline tui_size_t tui_window_parent_size_get(tui_window_parent_t* parent);
+
+/*
+ * Get the preliminary size of window based on content
+ *
+ * Temporarily store size in _rect w and h
+ */
+static inline tui_size_t tui_window_size_get(tui_window_t* window)
+{
+  tui_size_t size;
+
+  if (window->is_text)
+  {
+    size = tui_window_text_size_get((tui_window_text_t*) window);
+  }
+  else
+  {
+    size = tui_window_parent_size_get((tui_window_parent_t*) window);
+  }
+
+  window->_rect.w = size.w;
+  window->_rect.h = size.h;
+
+  return size;
+}
+
+/*
+ * Get the preliminary size of parent window based on children
+ */
+static inline tui_size_t tui_window_parent_size_get(tui_window_parent_t* parent)
+{
+  tui_window_t head = parent->head;
+
+  if (!head.rect.is_none)
+  {
+    tui_rect_t rect = head.rect;
+
+    return (tui_size_t)
+    {
+      .w = rect.x + rect.w,
+      .h = rect.y + rect.h
+    };
+  }
+
+  // If parent has no content (children), it has no size
+  if (!parent->children || parent->child_count == 0)
+  {
+    return TUI_SIZE_NONE;
+  }
+
+  bool has_padding = parent->has_padding;
+
+  tui_size_t this_size = TUI_SIZE_NONE;
+  tui_size_t max_size  = TUI_SIZE_NONE;
+
+  for (size_t index = 0; index < parent->child_count; index++)
+  {
+    tui_window_t* child = parent->children[index];
+
+    tui_size_t child_size = tui_window_size_get(child);
+
+    max_size.w = MAX(max_size.w, child_size.w);
+    max_size.h = MAX(max_size.h, child_size.h);
+
+    if (parent->is_vertical)
+    {
+      this_size.h += has_padding ? (child_size.h + 1) : child_size.h;
+    }
+    else
+    {
+      this_size.w += has_padding ? (child_size.w + 1) : child_size.w;
+    }
+  }
+
+  if (parent->is_vertical)
+  {
+    this_size.h += has_padding ? 1 : 0;
+
+    this_size.w = has_padding ? (max_size.w + 2) : max_size.w;
+  }
+  else
+  {
+    this_size.w += has_padding ? 1 : 0;
+
+    this_size.h = has_padding ? (max_size.h + 2) : max_size.h;
+  }
+
+  return this_size;
+}
+
+/*
+ * Calculate rect of parent children
+ *
+ * Make use of the temporarily stored sizes in _rect
+ */
+static inline void tui_children_rect_calc(tui_window_parent_t* parent)
+{
+  // Total w and h of content (children), without padding
+  tui_size_t size = TUI_SIZE_NONE;
+
+  size_t align_num = 0;
+
+  for (size_t index = 0; index < parent->child_count; index++)
+  {
+    tui_window_t* child = parent->children[index];
+
+    if (!child->rect.is_none)
+    {
+      continue;
+    }
+
+    align_num++;
+
+    if (parent->is_vertical)
+    {
+      size.h += child->_rect.h;
+    }
+    else
+    {
+      size.w += child->_rect.w;
+    }
+  }
+
+  int x_padding = parent->has_padding ? (align_num - 1) * 2 : 0;
+
+  int y_padding = parent->has_padding ? 2 : 0;
+
+
+  int x = (parent->head._rect.w - size.w + x_padding) / 2;
+
+  int y = (parent->head._rect.h - size.h + y_padding) / 2;
+
+
+  for (size_t index = 0; index < parent->child_count; index++)
+  {
+    tui_window_t* child = parent->children[index];
+
+    if (child->rect.is_none)
+    {
+      int w = child->_rect.w;
+
+      child->_rect = (tui_rect_t)
+      {
+        .x = x,
+        .y = y,
+        .w = w,
+        .h = size.h
+      };
+
+      info_print("calculated child rect: w:%d h:%d", child->_rect.w, child->_rect.h);
+
+      x += 2 + w;
+    }
+    else
+    {
+      child->_rect = child->rect;
+
+      info_print("already child rect: w:%d h:%d", child->_rect.w, child->_rect.h);
+    }
+
+
+    child->window = tui_ncurses_window_update(child->window, child->_rect);
+
+    if (!child->is_text)
+    {
+      tui_children_rect_calc((tui_window_parent_t*) child);
+    }
+  }
+}
+
+/*
+ * Calculate rect of every menu window
+ *
+ * menu base windows must have fixed rect (for now)
+ */
+static inline void tui_menu_rect_calc(tui_menu_t* menu)
+{
+  for (size_t index = 0; index < menu->window_count; index++)
+  {
+    tui_window_t* window = menu->windows[index];
+
+    window->_rect = window->rect;
+
+    window->window = tui_ncurses_window_update(window->window, window->_rect);
+
+    if(!window->is_text)
+    {
+      tui_children_rect_calc((tui_window_parent_t*) window);
+    }
+  }
+}
+
+/*
+ * Calculate rect of every tui window
+ *
+ * tui base windows must have fixed rect (for now)
+ */
+static inline void tui_rect_calc(tui_t* tui)
+{
+  for (size_t index = 0; index < tui->window_count; index++)
+  {
+    tui_window_t* window = tui->windows[index];
+
+    window->_rect = window->rect;
+
+    info_print("calculated rect: w:%d h:%d", window->_rect.w, window->_rect.h);
+
+    window->window = tui_ncurses_window_update(window->window, window->_rect);
+
+    if(!window->is_text)
+    {
+      tui_children_rect_calc((tui_window_parent_t*) window);
+    }
+  }
+
+  if (tui->menu)
+  {
+    tui_menu_rect_calc(tui->menu);
+  }
+}
+
+/*
  * Render tui - active menu and all windows
  */
 void tui_render(tui_t* tui)
 {
+  erase();
+
+  refresh();
+
+
   curs_set(0);
+
+  tui_rect_calc(tui);
+
+  
 
   tui_windows_render(tui->windows, tui->window_count);
 
@@ -898,29 +1197,6 @@ void tui_render(tui_t* tui)
   {
     tui_windows_render(menu->windows, menu->window_count);
   }
-
-  refresh();
-}
-
-/*
- * Create tui_border_t* object
- */
-tui_border_t* _tui_border_create(tui_color_t color, bool is_dashed)
-{
-  tui_border_t* border = malloc(sizeof(tui_border_t));
-
-  if (!border)
-  {
-    return NULL;
-  }
-
-  *border = (tui_border_t)
-  {
-    .color     = color,
-    .is_dashed = is_dashed
-  };
-
-  return border;
 }
 
 /*
@@ -933,7 +1209,7 @@ typedef struct tui_window_parent_config_t
   tui_rect_t         rect;
   tui_color_t        color;
   bool               is_visable;
-  tui_border_t*      border;
+  tui_border_t       border;
   bool               has_padding;
   tui_pos_t          pos;
   tui_align_t        align;
@@ -1108,6 +1384,8 @@ tui_window_parent_t* tui_parent_child_parent_create(tui_window_parent_t* parent,
     return NULL;
   }
 
+  child->head.parent = parent;
+
   if (tui_windows_window_append(&parent->children, &parent->child_count, (tui_window_t*) child) != 0)
   {
     tui_window_parent_free(&child);
@@ -1173,6 +1451,8 @@ tui_window_text_t* tui_parent_child_text_create(tui_window_parent_t* parent, tui
   {
     return NULL;
   }
+
+  child->head.parent = parent;
 
   if (tui_windows_window_append(&parent->children, &parent->child_count, (tui_window_t*) child) != 0)
   {
