@@ -88,11 +88,19 @@ typedef struct tui_color_t
 /*
  * Definitions of colors
  *
- * The rest of the colors come defined in ncurses.h
+ * These colors differ from ncurses colors by 1
  */
-#define COLOR_NONE -1
-
-const tui_color_t TUI_COLOR_NONE = { COLOR_NONE, COLOR_NONE };
+enum {
+  TUI_COLOR_NONE,
+  TUI_COLOR_BLACK,
+  TUI_COLOR_RED,
+  TUI_COLOR_GREEN,
+  TUI_COLOR_YELLOW,
+  TUI_COLOR_BLUE,
+  TUI_COLOR_MAGENTA,
+  TUI_COLOR_CYAN,
+  TUI_COLOR_WHITE
+};
 
 /*
  * Border
@@ -232,7 +240,7 @@ typedef struct tui_t
   size_t         window_count;
   tui_menu_t*    menu;
   tui_window_t*  window;
-  tui_color_t    color; // Active color
+  tui_color_t    color;
   tui_event_t    event;
   bool           is_running;
 } tui_t;
@@ -251,26 +259,45 @@ typedef struct tui_t
 /*
  * Get ncurses color index from tui color
  */
-static inline short tui_ncurses_color_get(tui_color_t color)
+static inline short tui_color_index_get(tui_color_t color)
 {
-  return (color.fg + 1) * 9 + (color.bg + 1);
+  return color.fg * 9 + color.bg;
 }
 
 /*
- * Inherit color from last color in case of transparency
- *
- * If foreground or background is NONE, last color is used
+ * Inherit color from parent in case of transparency
  */
-static inline tui_color_t tui_color_inherit(tui_color_t last_color, tui_color_t color)
+static inline tui_color_t tui_window_color_inherit(tui_window_t* window, tui_color_t color)
 {
-  if (color.fg == COLOR_NONE)
+  // If color has no transparency, it don't need to inherit
+  if (color.fg != TUI_COLOR_NONE && color.bg != TUI_COLOR_NONE)
   {
-    color.fg = last_color.fg;
+    return color;
   }
 
-  if (color.bg == COLOR_NONE)
+  // Get color of parent
+  tui_window_t* parent = (tui_window_t*) window->parent;
+
+  tui_color_t parent_color;
+
+  if (parent)
   {
-    color.bg = last_color.bg;
+    parent_color = tui_window_color_inherit(parent, parent->color);
+  }
+  else
+  {
+    parent_color = window->tui->color;
+  }
+
+  // Inherit color from parent
+  if (color.fg == TUI_COLOR_NONE)
+  {
+    color.fg = parent_color.fg;
+  }
+
+  if (color.bg == TUI_COLOR_NONE)
+  {
+    color.bg = parent_color.bg;
   }
 
   return color;
@@ -281,15 +308,11 @@ static inline tui_color_t tui_color_inherit(tui_color_t last_color, tui_color_t 
  */
 void tui_window_color_set(tui_window_t* window, tui_color_t color)
 {
-  tui_t* tui = window->tui;
-
-  color = tui_color_inherit(tui->color, color);
+  color = tui_window_color_inherit(window, color);
 
   info_print("color_on: fg:%d bg:%d", color.fg, color.bg);
 
-  wattron(window->window, COLOR_PAIR(tui_ncurses_color_get(color)));
-
-  tui->color = color;
+  wattron(window->window, COLOR_PAIR(tui_color_index_get(color)));
 }
 
 /*
@@ -297,15 +320,11 @@ void tui_window_color_set(tui_window_t* window, tui_color_t color)
  */
 void tui_window_fill(tui_window_t* window, tui_color_t color)
 {
-  tui_t* tui = window->tui;
-
-  color = tui_color_inherit(tui->color, color);
+  color = tui_window_color_inherit(window, color);
 
   info_print("color_fill: fg:%d bg:%d", color.fg, color.bg);
 
-  wbkgd(window->window, COLOR_PAIR(tui_ncurses_color_get(color)));
-
-  tui->color = color;
+  wbkgd(window->window, COLOR_PAIR(tui_color_index_get(color)));
 }
 
 /*

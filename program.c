@@ -54,12 +54,16 @@ int main(int argc, char* argv[])
     },
     .color = (tui_color_t)
     {
-      .bg = COLOR_BLUE,
-      .fg = COLOR_RED
+      .bg = TUI_COLOR_BLUE,
+      .fg = TUI_COLOR_RED
     },
     .border = (tui_border_t)
     {
-      .is_active = true
+      .is_active = true,
+      .color = (tui_color_t)
+      {
+        .bg = TUI_COLOR_MAGENTA
+      }
     }
   });
 
@@ -75,12 +79,17 @@ int main(int argc, char* argv[])
     },
     .color = (tui_color_t)
     {
-      .bg = COLOR_BLUE,
-      .fg = COLOR_RED
+      .bg = TUI_COLOR_WHITE,
+      .fg = TUI_COLOR_RED
     },
     .border = (tui_border_t)
     {
-      .is_active = true
+      .is_active = true,
+      .color = (tui_color_t)
+      {
+        .bg = TUI_COLOR_YELLOW,
+        .fg = TUI_COLOR_WHITE
+      }
     }
   });
 
@@ -97,8 +106,8 @@ int main(int argc, char* argv[])
     },
     .color = (tui_color_t)
     {
-      .bg = COLOR_BLUE,
-      .fg = COLOR_RED
+      .bg = TUI_COLOR_NONE,
+      .fg = TUI_COLOR_RED
     }
   });
 
