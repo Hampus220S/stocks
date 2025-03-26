@@ -26,7 +26,14 @@ int main(int argc, char* argv[])
 
   info_print("Initialized TUI");
 
-  tui_t* tui = tui_create(NULL);
+  tui_t* tui = tui_create((tui_config_t)
+  {
+    .color = (tui_color_t)
+    {
+      .bg = TUI_COLOR_BLACK,
+      .fg = TUI_COLOR_WHITE
+    }
+  });
 
   if (!tui)
   {
@@ -54,8 +61,7 @@ int main(int argc, char* argv[])
     },
     .color = (tui_color_t)
     {
-      .bg = TUI_COLOR_BLUE,
-      .fg = TUI_COLOR_RED
+      .fg = TUI_COLOR_YELLOW
     },
     .border = (tui_border_t)
     {
@@ -84,12 +90,7 @@ int main(int argc, char* argv[])
     },
     .border = (tui_border_t)
     {
-      .is_active = true,
-      .color = (tui_color_t)
-      {
-        .bg = TUI_COLOR_YELLOW,
-        .fg = TUI_COLOR_WHITE
-      }
+      .is_active = true
     }
   });
 
@@ -101,13 +102,8 @@ int main(int argc, char* argv[])
     {
       .w = 6,
       .h = 1,
-      .x = 3,
-      .y = 5
-    },
-    .color = (tui_color_t)
-    {
-      .bg = TUI_COLOR_NONE,
-      .fg = TUI_COLOR_RED
+      .x = 2,
+      .y = 3
     }
   });
 

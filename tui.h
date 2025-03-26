@@ -109,7 +109,6 @@ typedef struct tui_border_t
 {
   bool        is_active;
   tui_color_t color;
-  bool        is_dashed;
 } tui_border_t;
 
 /*
@@ -129,9 +128,10 @@ typedef struct tui_window_t
   char*                name;
   bool                 is_visable;
   tui_rect_t           rect;
-  tui_rect_t           _rect; // Temp calculated rect
+  tui_rect_t           _rect;  // Temp calculated rect
   WINDOW*              window;
   tui_color_t          color;
+  tui_color_t          _color; // Temp inherited color
   tui_window_event_t   event;
   tui_window_parent_t* parent;
   tui_t*               tui;
@@ -282,7 +282,7 @@ static inline tui_color_t tui_window_color_inherit(tui_window_t* window, tui_col
 
   if (parent)
   {
-    parent_color = tui_window_color_inherit(parent, parent->color);
+    parent_color = parent->_color;
   }
   else
   {
@@ -304,31 +304,25 @@ static inline tui_color_t tui_window_color_inherit(tui_window_t* window, tui_col
 }
 
 /*
- * Set color of window
- */
-void tui_window_color_set(tui_window_t* window, tui_color_t color)
-{
-  color = tui_window_color_inherit(window, color);
-
-  info_print("color_on: fg:%d bg:%d", color.fg, color.bg);
-
-  wattron(window->window, COLOR_PAIR(tui_color_index_get(color)));
-}
-
-/*
  * Fill window with color
  */
-void tui_window_fill(tui_window_t* window, tui_color_t color)
+static inline void tui_window_fill(tui_window_t* window)
 {
-  color = tui_window_color_inherit(window, color);
+  window->_color = tui_window_color_inherit(window, window->color);
 
-  info_print("color_fill: fg:%d bg:%d", color.fg, color.bg);
-
-  wbkgd(window->window, COLOR_PAIR(tui_color_index_get(color)));
+  wbkgd(window->window, COLOR_PAIR(tui_color_index_get(window->_color)));
 }
 
 /*
- * Draw window border with it's background and foreground color
+ * Fill tui with color
+ */
+static inline void tui_fill(tui_t* tui)
+{
+  bkgd(COLOR_PAIR(tui_color_index_get(tui->color)));
+}
+
+/*
+ * Draw window border with it's foreground color
  */
 void tui_border_draw(tui_window_parent_t* window)
 {
@@ -336,18 +330,14 @@ void tui_border_draw(tui_window_parent_t* window)
 
   if (!border.is_active) return;
 
+
   tui_window_t head = window->head;
 
-  tui_window_color_set((tui_window_t*) window, border.color);
+  tui_color_t color = tui_window_color_inherit((tui_window_t*) window, border.color);
 
-  if (border.is_dashed)
-  {
-    box(head.window, 0, 0);
-  }
-  else
-  {
-    box(head.window, 0, 0);
-  }
+  wattron(head.window, COLOR_PAIR(tui_color_index_get(color)));
+
+  box(head.window, 0, 0);
 }
 
 /*
@@ -470,10 +460,16 @@ static inline void tui_ncurses_window_free(WINDOW** window)
   *window = NULL;
 }
 
+typedef struct tui_config_t
+{
+  tui_color_t color;
+  tui_event_t event;
+} tui_config_t;
+
 /*
  * Create tui struct
  */
-tui_t* tui_create(tui_event_t event)
+tui_t* tui_create(tui_config_t config)
 {
   tui_t* tui = malloc(sizeof(tui_t));
 
@@ -488,7 +484,8 @@ tui_t* tui_create(tui_event_t event)
   {
     .w     = getmaxx(stdscr),
     .h     = getmaxy(stdscr),
-    .event = event
+    .event = config.event,
+    .color = config.color
   };
 
   return tui;
@@ -849,14 +846,9 @@ static inline void tui_window_text_render(tui_window_text_t* window)
 {
   tui_window_t head = window->head;
 
-  curs_set(0);
-
   werase(head.window);
 
-  // Draw background
-  tui_window_fill((tui_window_t*) window, head.color);
-
-  info_print("tui_window_fill bg:%d", window->head.color.bg);
+  tui_window_fill((tui_window_t*) window);
 
   // Draw text
   if (window->text)
@@ -881,18 +873,11 @@ static inline void tui_window_render(tui_window_t* window);
  */
 static inline void tui_window_parent_render(tui_window_parent_t* window)
 {
-  info_print("tui_window_parent_render");
-
   tui_window_t head = window->head;
-
-  curs_set(0);
 
   werase(head.window);
 
-  info_print("tui_window_fill parent bg: %d", window->head.color.bg);
-
-  // Draw background
-  tui_window_fill((tui_window_t*) window, head.color);
+  tui_window_fill((tui_window_t*) window);
 
   // Draw border
   tui_border_draw(window);
@@ -911,14 +896,14 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
  */
 static inline void tui_window_render(tui_window_t* window)
 {
+  info_print("tui_window_render: %s", window->name);
+
   // Unable to render if _rect is not calculated
   if (window->_rect.is_none)
   {
     info_print("tui_window_render: _rect not calculated");
     return;
   }
-
-  tui_window_color_set(window, window->color);
 
   if (window->is_text)
   {
@@ -1062,6 +1047,17 @@ static inline tui_size_t tui_window_parent_size_get(tui_window_parent_t* parent)
 }
 
 /*
+ * Calculate the absolute position of child rect relative to parent rect
+ */
+static inline tui_rect_t tui_child_rect_calc(tui_rect_t parent, tui_rect_t child)
+{
+  child.x += parent.x;
+  child.y += parent.y;
+
+  return child;
+}
+
+/*
  * Calculate rect of parent children
  *
  * Make use of the temporarily stored sizes in _rect
@@ -1126,7 +1122,7 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
     }
     else
     {
-      child->_rect = child->rect;
+      child->_rect = tui_child_rect_calc(parent->head.rect, child->rect);
 
       info_print("already child rect: w:%d h:%d", child->_rect.w, child->_rect.h);
     }
@@ -1176,8 +1172,6 @@ static inline void tui_rect_calc(tui_t* tui)
 
     window->_rect = window->rect;
 
-    info_print("calculated rect: w:%d h:%d", window->_rect.w, window->_rect.h);
-
     window->window = tui_ncurses_window_update(window->window, window->_rect);
 
     if(!window->is_text)
@@ -1197,19 +1191,22 @@ static inline void tui_rect_calc(tui_t* tui)
  */
 void tui_render(tui_t* tui)
 {
-  erase();
-
-  refresh();
-
-
+  // 1. Calculate all rects in tui
   curs_set(0);
 
   tui_rect_calc(tui);
 
-  
+  // 2. Fill tui background
+  erase();
 
+  tui_fill(tui);
+
+  refresh();
+  
+  // 3. Render tui windows
   tui_windows_render(tui->windows, tui->window_count);
 
+  // 4. Render menu windows
   tui_menu_t* menu = tui->menu;
 
   if (menu)
