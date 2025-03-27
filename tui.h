@@ -232,8 +232,7 @@ typedef struct tui_menu_t
  */
 typedef struct tui_t
 {
-  int            w;
-  int            h;
+  tui_size_t     size;
   tui_menu_t**   menus;
   size_t         menu_count;
   tui_window_t** windows;
@@ -482,10 +481,10 @@ tui_t* tui_create(tui_config_t config)
 
   *tui = (tui_t)
   {
-    .w     = getmaxx(stdscr),
-    .h     = getmaxy(stdscr),
-    .event = config.event,
-    .color = config.color
+    .size.w = getmaxx(stdscr),
+    .size.h = getmaxy(stdscr),
+    .event  = config.event,
+    .color  = config.color
   };
 
   return tui;
@@ -635,7 +634,7 @@ static inline int tui_text_h_get(char* text, int max_w)
       // Current word cannot be wrapped
       if (space_index == last_space_index)
       {
-        info_print("Cannot be wrapped: max_w: %d\n", max_w);
+        // info_print("Cannot be wrapped: max_w: %d\n", max_w);
         return -1;
       }
 
@@ -853,13 +852,6 @@ static inline void tui_window_text_render(tui_window_text_t* window)
   // Draw text
   if (window->text)
   {
-    free(window->text);
-  }
-
-  window->text = tui_text_extract(window->string);
-
-  if (window->text)
-  {
     tui_text_render(window);
   }
 
@@ -896,7 +888,12 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
  */
 static inline void tui_window_render(tui_window_t* window)
 {
-  info_print("tui_window_render: %s", window->name);
+  info_print("tui_window_render: %s x:%d y:%d w:%d h:%d", window->name,
+      window->_rect.x,
+      window->_rect.y,
+      window->_rect.w,
+      window->_rect.h
+  );
 
   // Unable to render if _rect is not calculated
   if (window->_rect.is_none)
@@ -927,123 +924,147 @@ static inline void tui_windows_render(tui_window_t** windows, size_t count)
 }
 
 /*
- * Get the preliminary size of text window based on text
- */
-static inline tui_size_t tui_window_text_size_get(tui_window_text_t* window)
-{
-  tui_window_t head = window->head;
-
-  if (!head.rect.is_none)
-  {
-    tui_rect_t rect = head.rect;
-
-    return (tui_size_t)
-    {
-      .w = rect.x + rect.w,
-      .h = rect.y + rect.h
-    };
-  }
-
-  if (!window->string || !window->text)
-  {
-    return TUI_SIZE_NONE;
-  }
-
-  int h = tui_text_h_get(window->text, head.tui->w);
-
-  int w = tui_text_w_get(window->text, h);
-
-  return (tui_size_t) { w, h };
-}
-
-static inline tui_size_t tui_window_parent_size_get(tui_window_parent_t* parent);
-
-/*
- * Get the preliminary size of window based on content
+ * Calculate preliminary size of text window, based on text
  *
- * Temporarily store size in _rect w and h
+ * Size is temporarily stored in _rect
  */
-static inline tui_size_t tui_window_size_get(tui_window_t* window)
+static inline void tui_window_text_size_calc(tui_window_text_t* window)
 {
-  tui_size_t size;
+  window->head._rect = (tui_rect_t) { 0 };
 
-  if (window->is_text)
+  if (!window->head.rect.is_none)
   {
-    size = tui_window_text_size_get((tui_window_text_t*) window);
+    window->head._rect = window->head.rect;
   }
-  else
+  else if (window->string)
   {
-    size = tui_window_parent_size_get((tui_window_parent_t*) window);
+    free(window->text);
+
+    window->text = tui_text_extract(window->string);
+
+    if (window->text)
+    {
+      int h = tui_text_h_get(window->text, window->head.tui->size.w);
+
+      int w = tui_text_w_get(window->text, h);
+
+      window->head._rect = (tui_rect_t) { .w = w, .h = h};
+    }
   }
-
-  window->_rect.w = size.w;
-  window->_rect.h = size.h;
-
-  return size;
 }
 
+static inline void tui_window_size_calc(tui_window_t* window);
+
 /*
- * Get the preliminary size of parent window based on children
+ * Calculate preliminary size of parent window, based on children
+ *
+ * Size is temporarily stored in _rect
  */
-static inline tui_size_t tui_window_parent_size_get(tui_window_parent_t* parent)
+static inline void tui_window_parent_size_calc(tui_window_parent_t* parent)
 {
-  tui_window_t head = parent->head;
-
-  if (!head.rect.is_none)
-  {
-    tui_rect_t rect = head.rect;
-
-    return (tui_size_t)
-    {
-      .w = rect.x + rect.w,
-      .h = rect.y + rect.h
-    };
-  }
-
-  // If parent has no content (children), it has no size
-  if (!parent->children || parent->child_count == 0)
-  {
-    return TUI_SIZE_NONE;
-  }
-
-  bool has_padding = parent->has_padding;
-
-  tui_size_t this_size = TUI_SIZE_NONE;
-  tui_size_t max_size  = TUI_SIZE_NONE;
-
+  // Calculate size of every child window downwards
   for (size_t index = 0; index < parent->child_count; index++)
   {
     tui_window_t* child = parent->children[index];
 
-    tui_size_t child_size = tui_window_size_get(child);
-
-    max_size.w = MAX(max_size.w, child_size.w);
-    max_size.h = MAX(max_size.h, child_size.h);
-
-    if (parent->is_vertical)
-    {
-      this_size.h += has_padding ? (child_size.h + 1) : child_size.h;
-    }
-    else
-    {
-      this_size.w += has_padding ? (child_size.w + 1) : child_size.w;
-    }
+    tui_window_size_calc(child);
   }
 
-  if (parent->is_vertical)
-  {
-    this_size.h += has_padding ? 1 : 0;
+  parent->head._rect = (tui_rect_t) { 0 };
 
-    this_size.w = has_padding ? (max_size.w + 2) : max_size.w;
+  if (!parent->head.rect.is_none)
+  {
+    parent->head._rect = parent->head.rect;
+  }
+  else if (parent->children && parent->child_count)
+  {
+    tui_size_t align_size = (tui_size_t) { 0 };
+    tui_size_t max_size   = (tui_size_t) { 0 };
+
+    size_t align_count = 0;
+
+    for (size_t index = 0; index < parent->child_count; index++)
+    {
+      tui_window_t* child = parent->children[index];
+
+      max_size.w = MAX(max_size.w, child->_rect.w);
+      max_size.h = MAX(max_size.h, child->_rect.h);
+
+      if (!child->rect.is_none)
+      {
+        max_size.w = MAX(max_size.w, child->rect.x + child->rect.w);
+        max_size.h = MAX(max_size.h, child->rect.y + child->rect.h);
+      }
+      else if (parent->is_vertical)
+      {
+        align_count++;
+
+        align_size.h += child->_rect.h;
+
+        align_size.w = MAX(align_size.w, child->_rect.w);
+      }
+      else
+      {
+        align_count++;
+
+        align_size.w += child->_rect.w;
+
+        align_size.h = MAX(align_size.h, child->_rect.h);
+      }
+    }
+
+    if (parent->has_padding)
+    {
+      if (parent->is_vertical)
+      {
+        align_size.h += (align_count + 1);
+
+        align_size.w += 2;
+      }
+      else
+      {
+        align_size.w += (align_count + 1);
+
+        align_size.h += 2;
+      }
+    }
+
+    parent->head._rect = (tui_rect_t)
+    {
+      .h = MAX(max_size.h, align_size.h),
+      .w = MAX(max_size.w, align_size.w)
+    };
+  }
+}
+
+/*
+ * Calculate preliminary size of window, based on content
+ *
+ * Size is temporarily stored in _rect
+ */
+static inline void tui_window_size_calc(tui_window_t* window)
+{
+  if (window->is_text)
+  {
+    tui_window_text_size_calc((tui_window_text_t*) window);
   }
   else
   {
-    this_size.w += has_padding ? 1 : 0;
-
-    this_size.h = has_padding ? (max_size.h + 2) : max_size.h;
+    tui_window_parent_size_calc((tui_window_parent_t*) window);
   }
 
-  return this_size;
+  info_print("tui_window_size_calc %s w:%d h:%d", window->name, window->_rect.w, window->_rect.h);
+}
+
+/*
+ * Calculate the preliminary sizes of windows
+ */
+static inline void tui_windows_size_calc(tui_window_t** windows, size_t count)
+{
+  for (size_t index = 0; index < count; index++)
+  {
+    tui_window_size_calc(windows[index]);
+  }
 }
 
 /*
@@ -1089,6 +1110,8 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
       size.w += child->_rect.w;
     }
   }
+
+  // info_print("size w:%d h:%d", size.w, size.h);
 
   int x_padding = parent->has_padding ? (align_num - 1) * 2 : 0;
 
@@ -1187,14 +1210,42 @@ static inline void tui_rect_calc(tui_t* tui)
 }
 
 /*
+ * Calculate sizes of tui windows and menu windows
+ */
+static inline void tui_size_calc(tui_t* tui)
+{
+  tui_windows_size_calc(tui->windows, tui->window_count);
+
+  tui_menu_t* menu = tui->menu;
+
+  if (menu)
+  {
+    tui_windows_size_calc(menu->windows, menu->window_count);
+  }
+}
+
+/*
+ * Resize tui by recalculating every size and rect of windows
+ */
+static inline void tui_resize(tui_t* tui)
+{
+  tui->size.w = getmaxx(stdscr);
+  tui->size.h = getmaxy(stdscr);
+
+  tui_size_calc(tui);
+
+  tui_rect_calc(tui);
+}
+
+/*
  * Render tui - active menu and all windows
  */
 void tui_render(tui_t* tui)
 {
-  // 1. Calculate all rects in tui
   curs_set(0);
 
-  tui_rect_calc(tui);
+  // 1. Resize every window to account for content
+  tui_resize(tui);
 
   // 2. Fill tui background
   erase();

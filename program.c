@@ -55,7 +55,7 @@ int main(int argc, char* argv[])
     .rect = (tui_rect_t)
     {
       .w = 20,
-      .h = 10,
+      .h = 20,
       .x = 3,
       .y = 5
     },
@@ -73,15 +73,15 @@ int main(int argc, char* argv[])
     }
   });
 
-  tui_parent_child_parent_create(parent, (tui_window_parent_config_t)
+  tui_window_parent_t* box = tui_parent_child_parent_create(parent, (tui_window_parent_config_t)
   {
     .name = "box",
     .rect = (tui_rect_t)
     {
       .w = 10,
-      .h = 3,
+      .h = 8,
       .x = 3,
-      .y = 5
+      .y = 2
     },
     .color = (tui_color_t)
     {
@@ -106,6 +106,22 @@ int main(int argc, char* argv[])
       .y = 3
     }
   });
+
+  char* lines[] =
+  {
+    "[+] Bookmark",
+    "This is some text",
+    "Hampus"
+  };
+
+  for (size_t index = 0; index < 3; index++)
+  {
+    tui_parent_child_text_create(box, (tui_window_text_config_t)
+    {
+      .string = lines[index],
+      .rect = TUI_RECT_NONE
+    });
+  }
 
 
   tui->is_running = true;
