@@ -54,7 +54,7 @@ int main(int argc, char* argv[])
     .name = "parent",
     .rect = (tui_rect_t)
     {
-      .w = 20,
+      .w = 40,
       .h = 20,
       .x = 3,
       .y = 5
@@ -76,13 +76,7 @@ int main(int argc, char* argv[])
   tui_window_parent_t* box = tui_parent_child_parent_create(parent, (tui_window_parent_config_t)
   {
     .name = "box",
-    .rect = (tui_rect_t)
-    {
-      .w = 10,
-      .h = 8,
-      .x = 3,
-      .y = 2
-    },
+    .rect = TUI_RECT_NONE,
     .color = (tui_color_t)
     {
       .bg = TUI_COLOR_WHITE,
@@ -91,9 +85,11 @@ int main(int argc, char* argv[])
     .border = (tui_border_t)
     {
       .is_active = true
-    }
+    },
+    .is_vertical = true
   });
 
+  /*
   tui_parent_child_text_create(parent, (tui_window_text_config_t)
   {
     .name = "key",
@@ -106,6 +102,7 @@ int main(int argc, char* argv[])
       .y = 3
     }
   });
+  */
 
   char* lines[] =
   {
@@ -119,7 +116,11 @@ int main(int argc, char* argv[])
     tui_parent_child_text_create(box, (tui_window_text_config_t)
     {
       .string = lines[index],
-      .rect = TUI_RECT_NONE
+      .rect = TUI_RECT_NONE,
+      .color = (tui_color_t)
+      {
+        .bg = TUI_COLOR_BLUE
+      }
     });
   }
 

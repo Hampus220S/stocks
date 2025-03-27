@@ -760,12 +760,12 @@ static inline void tui_text_render(tui_window_text_t* window)
 
   tui_text_ws_get(ws, window->text, h);
 
-  int line_index = 0;
-  int line_w = 0;
-
+  int x = 0;
   int y = 0;
 
   size_t length = strlen(window->string);
+
+  int y_shift = MAX(0, window->pos * (rect.h - h) / 2);
 
   for (size_t index = 0; index < length; index++)
   {
@@ -775,29 +775,28 @@ static inline void tui_text_render(tui_window_text_t* window)
     {
       while (index < length && window->string[index] != 'm') index++;
     }
-    if (letter == ' ' && line_w == 0)
+    if (letter == ' ' && x == 0)
     {
-      line_w = 0;
+      x = 0;
     }
-    else if (line_w >= ws[line_index])
+    else if (x >= ws[y])
     {
-      line_index++;
-
-      line_w = 0;
+      x = 0;
 
       y++;
     }
     else
     {
-      int x_shift = (rect.w - ws[line_index]) / 2;
+      int x_shift = MAX(0, (rect.w - ws[y]) / 2);
 
-      int y_shift = window->pos * (rect.h - h) / 2;
+      if (y + y_shift < rect.h && x + x_shift < rect.w)
+      {
+        wmove(head.window, rect.y + y_shift + y, rect.x + x_shift + x);
 
-      wmove(head.window, rect.y + y_shift + y, rect.x + x_shift + line_w);
+        waddch(head.window, letter);
+      }
 
-      waddch(head.window, letter);
-
-      line_w++;
+      x++;
     }
   }
 }
@@ -1029,6 +1028,12 @@ static inline void tui_window_parent_size_calc(tui_window_parent_t* parent)
       }
     }
 
+    if (parent->border.is_active)
+    {
+      align_size.w += 2;
+      align_size.h += 2;
+    }
+
     parent->head._rect = (tui_rect_t)
     {
       .h = MAX(max_size.h, align_size.h),
@@ -1072,9 +1077,6 @@ static inline void tui_windows_size_calc(tui_window_t** windows, size_t count)
  */
 static inline tui_rect_t tui_child_rect_calc(tui_rect_t parent, tui_rect_t child)
 {
-  child.x += parent.x;
-  child.y += parent.y;
-
   return child;
 }
 
@@ -1085,43 +1087,9 @@ static inline tui_rect_t tui_child_rect_calc(tui_rect_t parent, tui_rect_t child
  */
 static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 {
-  // Total w and h of content (children), without padding
-  tui_size_t size = TUI_SIZE_NONE;
+  tui_size_t align_size = (tui_size_t) { 0 };
 
-  size_t align_num = 0;
-
-  for (size_t index = 0; index < parent->child_count; index++)
-  {
-    tui_window_t* child = parent->children[index];
-
-    if (!child->rect.is_none)
-    {
-      continue;
-    }
-
-    align_num++;
-
-    if (parent->is_vertical)
-    {
-      size.h += child->_rect.h;
-    }
-    else
-    {
-      size.w += child->_rect.w;
-    }
-  }
-
-  // info_print("size w:%d h:%d", size.w, size.h);
-
-  int x_padding = parent->has_padding ? (align_num - 1) * 2 : 0;
-
-  int y_padding = parent->has_padding ? 2 : 0;
-
-
-  int x = (parent->head._rect.w - size.w + x_padding) / 2;
-
-  int y = (parent->head._rect.h - size.h + y_padding) / 2;
-
+  size_t align_count = 0;
 
   for (size_t index = 0; index < parent->child_count; index++)
   {
@@ -1129,26 +1097,92 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
     if (child->rect.is_none)
     {
-      int w = child->_rect.w;
+      align_count++;
 
+      if (parent->is_vertical)
+      {
+        align_size.h += child->_rect.h;
+
+        info_print("align_size.w MAX(%d, %d)", align_size.w, child->_rect.w);
+
+        align_size.w = MAX(align_size.w, child->_rect.w);
+      }
+      else
+      {
+        align_size.w += child->_rect.w;
+
+        align_size.h = MAX(align_size.h, child->_rect.h);
+      }
+    }
+  }
+
+  tui_size_t max_size = { parent->head._rect.w, parent->head._rect.h };
+
+  if (parent->has_padding)
+  {
+    if (parent->is_vertical)
+    {
+      max_size.h -= (align_count + 1);
+
+      max_size.w -= 2;
+    }
+    else
+    {
+      max_size.w -= (align_count + 1);
+
+      max_size.h -= 2;
+    }
+  }
+
+  if (parent->border.is_active)
+  {
+    max_size.w -= 2;
+    max_size.h -= 2;
+  }
+
+  // Limit size to parent's size
+  align_size.w = MIN(align_size.w, max_size.w);
+  align_size.h = MIN(align_size.h, max_size.h);
+
+  /*
+  int w_space = (parent->head._rect.w - size.w);
+
+  int h_space = (parent->head._rect.h - size.h);
+  */
+
+  // The following is TUI_ALIGN_START
+  
+  int x = 1;
+  int y = 1;
+
+  for (size_t index = 0; index < parent->child_count; index++)
+  {
+    tui_window_t* child = parent->children[index];
+
+    if (child->rect.is_none)
+    {
       child->_rect = (tui_rect_t)
       {
         .x = x,
         .y = y,
-        .w = w,
-        .h = size.h
+        .w = align_size.w,
+        .h = child->_rect.h
       };
 
       info_print("calculated child rect: w:%d h:%d", child->_rect.w, child->_rect.h);
 
-      x += 2 + w;
+      y += child->_rect.h;
     }
     else
     {
-      child->_rect = tui_child_rect_calc(parent->head.rect, child->rect);
+      child->_rect = child->rect;
 
       info_print("already child rect: w:%d h:%d", child->_rect.w, child->_rect.h);
     }
+
+    // Move child window into parent window
+    child->_rect.x += parent->head._rect.x;
+    child->_rect.y += parent->head._rect.y;
 
 
     child->window = tui_ncurses_window_update(child->window, child->_rect);
