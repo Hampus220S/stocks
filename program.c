@@ -120,7 +120,8 @@ int main(int argc, char* argv[])
       .color = (tui_color_t)
       {
         .bg = TUI_COLOR_BLUE
-      }
+      },
+      .align = TUI_POS_CENTER
     });
   }
 

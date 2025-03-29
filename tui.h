@@ -599,13 +599,13 @@ void tui_event(tui_t* tui, int key)
 /*
  * Get the height of wrapped text given the width
  */
-static inline int tui_text_h_get(char* text, int max_w)
+static inline int tui_text_h_get(char* text, int w)
 {
   size_t length = strlen(text);
 
   int h = 1;
 
-  int line_w = 0;
+  int x = 0;
   int space_index = 0;
 
   int last_space_index = space_index;
@@ -621,20 +621,20 @@ static inline int tui_text_h_get(char* text, int max_w)
 
     if (letter == '\n')
     {
-      line_w = 0;
+      x = 0;
 
       h++;
     }
-    else if (line_w >= max_w)
+    else if (x >= w)
     {
-      line_w = 0;
+      x = 0;
 
       h++;
 
       // Current word cannot be wrapped
       if (space_index == last_space_index)
       {
-        // info_print("Cannot be wrapped: max_w: %d\n", max_w);
+        // info_print("Cannot be wrapped: w: %d\n", w);
         return -1;
       }
 
@@ -644,7 +644,7 @@ static inline int tui_text_h_get(char* text, int max_w)
     }
     else
     {
-      line_w++;
+      x++;
     }
   }
 
@@ -689,20 +689,20 @@ static inline int tui_text_w_get(char* text, int h)
 }
 
 /*
- * Get widths of lines in text, regarding max height
+ * Get widths of lines in text, regarding height
  */
 static inline void tui_text_ws_get(int* ws, char* text, int h)
 {
-  int max_w = tui_text_w_get(text, h);
+  int w = tui_text_w_get(text, h);
 
   size_t length = strlen(text);
 
-  int line_index = 0;
-  int line_w = 0;
+  int y = 0;
+  int x = 0;
 
   int space_index = 0;
 
-  for (size_t index = 0; (index < length) && (line_index < h); index++)
+  for (size_t index = 0; (index < length) && (y < h); index++)
   {
     char letter = text[index];
 
@@ -711,34 +711,34 @@ static inline void tui_text_ws_get(int* ws, char* text, int h)
       space_index = index;
     }
 
-    if (letter == ' ' && line_w == 0)
+    if (letter == ' ' && x == 0)
     {
-      line_w = 0;
+      x = 0;
     }
     else if (letter == '\n')
     {
-      ws[line_index++] = line_w;
+      ws[y++] = x;
 
-      line_w = 0;
+      x = 0;
     }
-    else if (line_w >= max_w)
+    else if (x >= w)
     {
       // full line width - last partial word
-      ws[line_index++] = line_w - (index - space_index);
+      ws[y++] = x - (index - space_index);
 
-      line_w = 0;
+      x = 0;
 
       index = space_index;
     }
     else
     {
-      line_w++;
+      x++;
     }
 
     // Store the width of last line
     if (index + 1 == length)
     {
-      ws[line_index] = line_w;
+      ws[y] = x;
     }
   }
 }
@@ -771,6 +771,8 @@ static inline void tui_text_render(tui_window_text_t* window)
   {
     char letter = window->string[index];
 
+    int w = ws[y];
+
     if (letter == '\033')
     {
       while (index < length && window->string[index] != 'm') index++;
@@ -779,7 +781,7 @@ static inline void tui_text_render(tui_window_text_t* window)
     {
       x = 0;
     }
-    else if (x >= ws[y])
+    else if (x >= w)
     {
       x = 0;
 
@@ -787,13 +789,11 @@ static inline void tui_text_render(tui_window_text_t* window)
     }
     else
     {
-      int x_shift = MAX(0, (rect.w - ws[y]) / 2);
+      int x_shift = MAX(0, window->align * (rect.w - w) / 2);
 
       if (y + y_shift < rect.h && x + x_shift < rect.w)
       {
-        wmove(head.window, rect.y + y_shift + y, rect.x + x_shift + x);
-
-        waddch(head.window, letter);
+        mvwaddch(head.window, y_shift + y, x_shift + x, letter);
       }
 
       x++;
