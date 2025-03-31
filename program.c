@@ -52,26 +52,22 @@ int main(int argc, char* argv[])
   tui_window_parent_t* parent = tui_window_parent_create(tui, (tui_window_parent_config_t)
   {
     .name = "parent",
-    .rect = (tui_rect_t)
-    {
-      .w = 40,
-      .h = 20,
-      .x = 3,
-      .y = 5
-    },
+    .rect = TUI_RECT_NONE,
     .color = (tui_color_t)
     {
-      .fg = TUI_COLOR_YELLOW
+      .bg = TUI_COLOR_GREEN,
+      .fg = TUI_COLOR_MAGENTA
     },
     .border = (tui_border_t)
     {
       .is_active = true,
-      .color = (tui_color_t)
-      {
-        .bg = TUI_COLOR_MAGENTA
-      }
-    }
+      .color = TUI_COLOR_NONE
+    },
+    .is_inflated = false,
+    .has_padding = true,
+    .pos = TUI_POS_CENTER,
   });
+
 
   tui_window_parent_t* box = tui_parent_child_parent_create(parent, (tui_window_parent_config_t)
   {
@@ -86,29 +82,17 @@ int main(int argc, char* argv[])
     {
       .is_active = true
     },
-    .is_vertical = true
+    .is_vertical = true,
+    .is_inflated = true,
+    .has_padding = true,
+    .pos = TUI_POS_END,
   });
-
-  /*
-  tui_parent_child_text_create(parent, (tui_window_text_config_t)
-  {
-    .name = "key",
-    .string = "Hej",
-    .rect = (tui_rect_t)
-    {
-      .w = 6,
-      .h = 1,
-      .x = 2,
-      .y = 3
-    }
-  });
-  */
 
   char* lines[] =
   {
-    "[+] Bookmark",
-    "This is some text",
-    "Hampus"
+    "[+] Apple",
+    "[+] Pear",
+    "[+] Banana"
   };
 
   for (size_t index = 0; index < 3; index++)
@@ -121,7 +105,49 @@ int main(int argc, char* argv[])
       {
         .bg = TUI_COLOR_BLUE
       },
-      .align = TUI_POS_CENTER
+      .align = TUI_POS_START
+    });
+  }
+
+  tui_window_parent_t* box2 = tui_parent_child_parent_create(parent, (tui_window_parent_config_t)
+  {
+    .name = "box2",
+    .rect = TUI_RECT_NONE,
+    .color = (tui_color_t)
+    {
+      .bg = TUI_COLOR_WHITE,
+      .fg = TUI_COLOR_RED
+    },
+    .border = (tui_border_t)
+    {
+      .is_active = true
+    },
+    .is_vertical = true,
+    .has_padding = true,
+    .pos = TUI_POS_END,
+  });
+
+  char* lines2[] =
+  {
+    "[+] Keyboard",
+    "[+] Mouse",
+    "[+] Computer",
+    "[+] Case",
+    "[+] Voltage",
+    "[+] Fan"
+  };
+
+  for (size_t index = 0; index < 6; index++)
+  {
+    tui_parent_child_text_create(box2, (tui_window_text_config_t)
+    {
+      .string = lines2[index],
+      .rect = TUI_RECT_NONE,
+      .color = (tui_color_t)
+      {
+        .bg = TUI_COLOR_BLUE
+      },
+      .align = TUI_POS_START
     });
   }
 

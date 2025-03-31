@@ -209,6 +209,7 @@ typedef struct tui_window_parent_t
   tui_window_t** children;
   size_t         child_count;
   bool           is_vertical;
+  bool           is_inflated;
   tui_border_t   border;
   bool           has_padding;
   tui_pos_t      pos;
@@ -1018,11 +1019,11 @@ static inline void tui_window_parent_size_calc(tui_window_parent_t* parent)
       {
         align_size.h += (align_count + 1);
 
-        align_size.w += 2;
+        align_size.w += 4;
       }
       else
       {
-        align_size.w += (align_count + 1);
+        align_size.w += (align_count + 1) * 2;
 
         align_size.h += 2;
       }
@@ -1070,14 +1071,6 @@ static inline void tui_windows_size_calc(tui_window_t** windows, size_t count)
   {
     tui_window_size_calc(windows[index]);
   }
-}
-
-/*
- * Calculate the absolute position of child rect relative to parent rect
- */
-static inline tui_rect_t tui_child_rect_calc(tui_rect_t parent, tui_rect_t child)
-{
-  return child;
 }
 
 /*
@@ -1152,8 +1145,8 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
   // The following is TUI_ALIGN_START
   
-  int x = 1;
-  int y = 1;
+  int x = parent->has_padding ? 3 : 1;
+  int y = parent->has_padding ? 2 : 1;
 
   for (size_t index = 0; index < parent->child_count; index++)
   {
@@ -1161,17 +1154,65 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
     if (child->rect.is_none)
     {
-      child->_rect = (tui_rect_t)
+      if (parent->is_vertical)
       {
-        .x = x,
-        .y = y,
-        .w = align_size.w,
-        .h = child->_rect.h
-      };
+        x = parent->has_padding ? 3 : 1;
 
-      info_print("calculated child rect: w:%d h:%d", child->_rect.w, child->_rect.h);
+        int w = parent->is_inflated ? align_size.w : child->_rect.w;
 
-      y += child->_rect.h;
+        x += parent->pos * (align_size.w - w) / 2;
+
+        int h = child->_rect.h;
+
+        if (parent->is_inflated)
+        {
+          // h += 
+        }
+
+        child->_rect = (tui_rect_t)
+        {
+          .x = x,
+          .y = y,
+          .w = w,
+          .h = h
+        };
+
+        info_print("vertical calculated child rect: w:%d h:%d", child->_rect.w, child->_rect.h);
+
+        y += h;
+
+        if (parent->has_padding)
+        {
+          y += 1;
+        }
+      }
+      else
+      {
+        y = parent->has_padding ? 2 : 1;
+
+        int h = parent->is_inflated ? align_size.h : child->_rect.h;
+
+        y += parent->pos * (align_size.h - h) / 2;
+
+        int w = child->_rect.w;
+
+        child->_rect = (tui_rect_t)
+        {
+          .x = x,
+          .y = y,
+          .w = w,
+          .h = h
+        };
+
+        info_print("horizontal calculated child rect: w:%d h:%d", child->_rect.w, child->_rect.h);
+
+        x += w;
+
+        if (parent->has_padding)
+        {
+          x += 2;
+        }
+      }
     }
     else
     {
@@ -1227,7 +1268,14 @@ static inline void tui_rect_calc(tui_t* tui)
   {
     tui_window_t* window = tui->windows[index];
 
-    window->_rect = window->rect;
+    if (window->rect.is_none)
+    {
+      window->_rect = window->_rect;
+    }
+    else
+    {
+      window->_rect = window->rect;
+    }
 
     window->window = tui_ncurses_window_update(window->window, window->_rect);
 
@@ -1315,6 +1363,7 @@ typedef struct tui_window_parent_config_t
   tui_pos_t          pos;
   tui_align_t        align;
   bool               is_vertical;
+  bool               is_inflated;
 } tui_window_parent_config_t;
 
 /*
@@ -1349,7 +1398,8 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
     .border      = config.border,
     .pos         = config.pos,
     .align       = config.align,
-    .is_vertical = config.is_vertical
+    .is_vertical = config.is_vertical,
+    .is_inflated = config.is_inflated
   };
 
   return window;
