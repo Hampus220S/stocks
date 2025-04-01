@@ -1134,7 +1134,26 @@ static inline void tui_align_rect_calc(tui_rect_t* rect, tui_window_parent_t* pa
 
     int h_gap = 0;
 
-    if (parent->align == TUI_ALIGN_BETWEEN)
+    if (parent->is_inflated)
+    {
+      if (parent->has_padding)
+      {
+        // Add this gap after current child
+        h_gap += 1;
+        
+        h_space = MAX(0, h_space - align_count + 1); 
+      }
+
+      int gap = h_space / align_count;
+
+      h += gap;
+
+      if (h_space - gap * align_count > align_index)
+      {
+        h += 1;
+      }
+    }
+    else if (parent->align == TUI_ALIGN_BETWEEN)
     {
       // Add this gap after current child
       h_gap += h_space / (align_count - 1);
@@ -1199,7 +1218,26 @@ static inline void tui_align_rect_calc(tui_rect_t* rect, tui_window_parent_t* pa
 
     int w_gap = 0;
 
-    if (parent->align == TUI_ALIGN_BETWEEN)
+    if (parent->is_inflated)
+    {
+      if (parent->has_padding)
+      {
+        // Add this gap after current child
+        w_gap += 1;
+        
+        w_space = MAX(0, w_space - align_count + 1); 
+      }
+
+      int gap = w_space / align_count;
+
+      w += gap;
+
+      if (w_space - gap * align_count > align_index)
+      {
+        w += 1;
+      }
+    }
+    else if (parent->align == TUI_ALIGN_BETWEEN)
     {
       // Add this gap after current child
       w_gap += w_space / (align_count - 1);

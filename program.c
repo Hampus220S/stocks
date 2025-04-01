@@ -75,16 +75,15 @@ int main(int argc, char* argv[])
     .rect = TUI_RECT_NONE,
     .color = (tui_color_t)
     {
-      .bg = TUI_COLOR_WHITE,
       .fg = TUI_COLOR_RED
     },
     .border = (tui_border_t)
     {
-      .is_active = true
+      .is_active = false
     },
     .is_vertical = true,
     .is_inflated = true,
-    .has_padding = true,
+    .has_padding = false,
     .pos = TUI_POS_END,
     .align = TUI_ALIGN_BETWEEN
   });
@@ -106,7 +105,8 @@ int main(int argc, char* argv[])
       {
         .bg = TUI_COLOR_BLUE
       },
-      .align = TUI_POS_START
+      .align = TUI_POS_CENTER,
+      .pos = TUI_POS_CENTER,
     });
   }
 
