@@ -942,7 +942,11 @@ static inline void tui_window_text_size_calc(tui_window_text_t* window)
 
   if (!window->head.rect.is_none)
   {
-    window->head._rect = window->head.rect;
+    window->head._rect = (tui_rect_t)
+    {
+      .w = MAX(0, window->head.rect.w),
+      .h = MAX(0, window->head.rect.h)
+    };
   }
   else if (window->text)
   {
@@ -975,7 +979,11 @@ static inline void tui_window_parent_size_calc(tui_window_parent_t* parent)
 
   if (!parent->head.rect.is_none)
   {
-    parent->head._rect = parent->head.rect;
+    parent->head._rect = (tui_rect_t)
+    {
+      .w = MAX(0, parent->head.rect.w),
+      .h = MAX(0, parent->head.rect.h)
+    };
   }
   else if (parent->children && parent->child_count)
   {
@@ -1289,6 +1297,34 @@ static inline void tui_align_rect_calc(tui_rect_t* rect, tui_window_parent_t* pa
 }
 
 /*
+ * Get rect for window from rect with potential negative values
+ */
+static inline tui_rect_t tui_window_rect_get(tui_rect_t rect, int parent_w, int parent_h)
+{
+  if (rect.h <= 0)
+  {
+    rect.h = MAX(0, parent_h + rect.h);
+  }
+
+  if (rect.w <= 0)
+  {
+    rect.w = MAX(0, parent_w + rect.w);
+  }
+
+  if (rect.x < 0)
+  {
+    rect.x = MAX(0, parent_w + rect.x);
+  }
+
+  if (rect.y < 0)
+  {
+    rect.y = MAX(0, parent_h + rect.y);
+  }
+
+  return rect;
+}
+
+/*
  * Calculate rect of parent children
  *
  * Make use of the temporarily stored sizes in _rect
@@ -1363,7 +1399,9 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
     }
     else
     {
-      child->_rect = child->rect;
+      tui_rect_t parent_rect = parent->head._rect;
+
+      child->_rect = tui_window_rect_get(child->rect, parent_rect.w, parent_rect.h);
     }
 
     // Move child window into parent window
@@ -1381,17 +1419,22 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 }
 
 /*
- * Calculate rect of every menu window
- *
- * menu base windows must have fixed rect (for now)
+ * Calculate rects of windows
  */
-static inline void tui_menu_rect_calc(tui_menu_t* menu)
+static inline void tui_windows_rect_calc(tui_window_t** windows, size_t count, int w, int h)
 {
-  for (size_t index = 0; index < menu->window_count; index++)
+  for (size_t index = 0; index < count; index++)
   {
-    tui_window_t* window = menu->windows[index];
+    tui_window_t* window = windows[index];
 
-    window->_rect = window->rect;
+    if (window->rect.is_none)
+    {
+      window->_rect = window->_rect;
+    }
+    else
+    {
+      window->_rect = tui_window_rect_get(window->rect, w, h);
+    }
 
     window->window = tui_ncurses_window_update(window->window, window->_rect);
 
@@ -1409,30 +1452,16 @@ static inline void tui_menu_rect_calc(tui_menu_t* menu)
  */
 static inline void tui_rect_calc(tui_t* tui)
 {
-  for (size_t index = 0; index < tui->window_count; index++)
+  int w = tui->size.w;
+  int h = tui->size.h;
+
+  tui_windows_rect_calc(tui->windows, tui->window_count, w, h);
+
+  tui_menu_t* menu = tui->menu;
+
+  if (menu)
   {
-    tui_window_t* window = tui->windows[index];
-
-    if (window->rect.is_none)
-    {
-      window->_rect = window->_rect;
-    }
-    else
-    {
-      window->_rect = window->rect;
-    }
-
-    window->window = tui_ncurses_window_update(window->window, window->_rect);
-
-    if(!window->is_text)
-    {
-      tui_children_rect_calc((tui_window_parent_t*) window);
-    }
-  }
-
-  if (tui->menu)
-  {
-    tui_menu_rect_calc(tui->menu);
+    tui_windows_rect_calc(menu->windows, menu->window_count, w, h);
   }
 }
 
