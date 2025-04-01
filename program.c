@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
       .is_active = true,
       .color = TUI_COLOR_NONE
     },
-    .is_inflated = false,
+    .is_inflated = true,
     .has_padding = true,
     .pos = TUI_POS_CENTER,
   });
@@ -86,6 +86,7 @@ int main(int argc, char* argv[])
     .is_inflated = true,
     .has_padding = true,
     .pos = TUI_POS_END,
+    .align = TUI_ALIGN_BETWEEN
   });
 
   char* lines[] =
@@ -125,6 +126,23 @@ int main(int argc, char* argv[])
     .is_vertical = true,
     .has_padding = true,
     .pos = TUI_POS_END,
+  });
+
+  tui_parent_child_text_create(box2, (tui_window_text_config_t)
+  {
+    .name = "box2-title",
+    .string = "BOX2",
+    .rect = (tui_rect_t)
+    {
+      .x = 1,
+      .y = 0,
+      .w = 30,
+      .h = 1
+    },
+    .color = (tui_color_t)
+    {
+      .bg = TUI_COLOR_MAGENTA
+    }
   });
 
   char* lines2[] =

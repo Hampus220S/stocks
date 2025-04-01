@@ -766,7 +766,7 @@ static inline void tui_text_render(tui_window_text_t* window)
 
   size_t length = strlen(window->string);
 
-  int y_shift = MAX(0, window->pos * (rect.h - h) / 2);
+  int y_shift = MAX(0, (float) window->pos / 2.f * (rect.h - h));
 
   for (size_t index = 0; index < length; index++)
   {
@@ -790,10 +790,12 @@ static inline void tui_text_render(tui_window_text_t* window)
     }
     else
     {
-      int x_shift = MAX(0, window->align * (rect.w - w) / 2);
+      int x_shift = MAX(0, (float) window->align / 2.f * (rect.w - w));
 
       if (y + y_shift < rect.h && x + x_shift < rect.w)
       {
+        // info_print("mvwaddch(%d, %d, %c)", y_shift + y, x_shift + x, letter);
+
         mvwaddch(head.window, y_shift + y, x_shift + x, letter);
       }
 
@@ -927,29 +929,28 @@ static inline void tui_windows_render(tui_window_t** windows, size_t count)
  * Calculate preliminary size of text window, based on text
  *
  * Size is temporarily stored in _rect
+ *
+ * Also, extract text from string
  */
 static inline void tui_window_text_size_calc(tui_window_text_t* window)
 {
   window->head._rect = (tui_rect_t) { 0 };
 
+  free(window->text);
+
+  window->text = tui_text_extract(window->string);
+
   if (!window->head.rect.is_none)
   {
     window->head._rect = window->head.rect;
   }
-  else if (window->string)
+  else if (window->text)
   {
-    free(window->text);
+    int h = tui_text_h_get(window->text, window->head.tui->size.w);
 
-    window->text = tui_text_extract(window->string);
+    int w = tui_text_w_get(window->text, h);
 
-    if (window->text)
-    {
-      int h = tui_text_h_get(window->text, window->head.tui->size.w);
-
-      int w = tui_text_w_get(window->text, h);
-
-      window->head._rect = (tui_rect_t) { .w = w, .h = h};
-    }
+    window->head._rect = (tui_rect_t) { .w = w, .h = h};
   }
 }
 
@@ -1074,6 +1075,182 @@ static inline void tui_windows_size_calc(tui_window_t** windows, size_t count)
 }
 
 /*
+ *
+ */
+static inline int tui_align_y_get(tui_window_parent_t* parent)
+{
+  int y = 0;
+
+  if (parent->border.is_active)
+  {
+    y += 1;
+  }
+
+  if (parent->has_padding)
+  {
+    y += 1;
+  }
+
+  return y;
+}
+
+/*
+ *
+ */
+static inline int tui_align_x_get(tui_window_parent_t* parent)
+{
+  int x = 0;
+
+  if (parent->border.is_active)
+  {
+    x += 1;
+  }
+
+  if (parent->has_padding)
+  {
+    x += 2;
+  }
+
+  return x;
+}
+
+/*
+ * Calculate rect of aligned child
+ */
+static inline void tui_align_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, size_t align_count, size_t align_index)
+{
+  if (parent->is_vertical)
+  {
+    if (align_index == 0)
+    {
+      rect->y = tui_align_y_get(parent);
+    }
+
+    rect->x = tui_align_x_get(parent);
+
+    int h_space = (max_size.h - align_size.h);
+
+    int h = child->_rect.h;
+
+    int h_gap = 0;
+
+    if (parent->align == TUI_ALIGN_BETWEEN)
+    {
+      // Add this gap after current child
+      h_gap += h_space / (align_count - 1);
+    }
+    else if (parent->align == TUI_ALIGN_AROUND)
+    {
+      // Add this gap before current child
+      int gap = (float) h_space / (float) (align_count + 1);
+
+      int rest = h_space - gap * (align_count + 1);
+
+      if (align_index == 0 && rest > 0)
+      {
+        rect->y += (float) rest / 2.f;
+      }
+
+      rect->y += gap;
+    }
+    else if (parent->align < 3) // START, CENTER, END
+    {
+      if (align_index == 0) // First child to align
+      {
+        // Add this gap before current child
+        if (parent->has_padding)
+        {
+          h_space = MAX(0, h_space - align_count + 1); 
+        }
+
+        rect->y += (float) parent->align / 2.f * h_space;
+      }
+      else if (parent->has_padding)
+      {
+        // Add this gap after current child
+        h_gap += 1;
+      }
+    }
+
+    if (align_index > 0)
+    {
+      rect->y += last_child->_rect.h + h_gap;
+    }
+
+    int w = parent->is_inflated ? max_size.w : child->_rect.w;
+
+    rect->w = w;
+    rect->h = h;
+
+    rect->x += (float) parent->pos / 2.f * (max_size.w - w);
+  }
+  else
+  {
+    if (align_index == 0)
+    {
+      rect->x = tui_align_x_get(parent);
+    }
+
+    rect->y = tui_align_y_get(parent);
+
+    int w_space = (max_size.w - align_size.w);
+
+    int w = child->_rect.w;
+
+    int w_gap = 0;
+
+    if (parent->align == TUI_ALIGN_BETWEEN)
+    {
+      // Add this gap after current child
+      w_gap += w_space / (align_count - 1);
+    }
+    else if (parent->align == TUI_ALIGN_AROUND)
+    {
+      int gap = (float) w_space / (float) (align_count + 1);
+
+      int rest = w_space - gap * (align_count + 1);
+
+      if (align_index == 0 && rest > 0)
+      {
+        rect->x += (float) rest / 2.f;
+      }
+
+      rect->x += gap;
+    }
+    else if (parent->align < 3) // START, CENTER, END
+    {
+      if (align_index == 0) // First child to align
+      {
+        // Add this gap before current child
+        if (parent->has_padding)
+        {
+          w_space = MAX(0, w_space - align_count + 1); 
+        }
+
+        rect->x += (float) parent->align / 2.f * w_space;
+      }
+      else if (parent->has_padding)
+      {
+        // Add this gap after current child
+        w_gap += 1;
+      }
+    }
+
+    if (align_index > 0)
+    {
+      rect->x += last_child->_rect.w + w_gap;
+    }
+
+    int h = parent->is_inflated ? max_size.h : child->_rect.h;
+
+    rect->w = w;
+    rect->h = h;
+
+    rect->y += (float) parent->pos / 2.f * (max_size.h - h);
+  }
+}
+
+/*
  * Calculate rect of parent children
  *
  * Make use of the temporarily stored sizes in _rect
@@ -1096,8 +1273,6 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
       {
         align_size.h += child->_rect.h;
 
-        info_print("align_size.w MAX(%d, %d)", align_size.w, child->_rect.w);
-
         align_size.w = MAX(align_size.w, child->_rect.w);
       }
       else
@@ -1113,18 +1288,9 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
   if (parent->has_padding)
   {
-    if (parent->is_vertical)
-    {
-      max_size.h -= (align_count + 1);
+    max_size.w -= 4;
 
-      max_size.w -= 2;
-    }
-    else
-    {
-      max_size.w -= (align_count + 1);
-
-      max_size.h -= 2;
-    }
+    max_size.h -= 2;
   }
 
   if (parent->border.is_active)
@@ -1137,16 +1303,11 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
   align_size.w = MIN(align_size.w, max_size.w);
   align_size.h = MIN(align_size.h, max_size.h);
 
-  /*
-  int w_space = (parent->head._rect.w - size.w);
+  tui_rect_t rect = { 0 };
 
-  int h_space = (parent->head._rect.h - size.h);
-  */
+  tui_window_t* last_child = NULL;
 
-  // The following is TUI_ALIGN_START
-  
-  int x = parent->has_padding ? 3 : 1;
-  int y = parent->has_padding ? 2 : 1;
+  size_t align_index = 0;
 
   for (size_t index = 0; index < parent->child_count; index++)
   {
@@ -1154,71 +1315,17 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
     if (child->rect.is_none)
     {
-      if (parent->is_vertical)
-      {
-        x = parent->has_padding ? 3 : 1;
+      tui_align_rect_calc(&rect, parent, child, last_child, max_size, align_size, align_count, align_index);
 
-        int w = parent->is_inflated ? align_size.w : child->_rect.w;
+      child->_rect = rect;
 
-        x += parent->pos * (align_size.w - w) / 2;
+      last_child = child;
 
-        int h = child->_rect.h;
-
-        if (parent->is_inflated)
-        {
-          // h += 
-        }
-
-        child->_rect = (tui_rect_t)
-        {
-          .x = x,
-          .y = y,
-          .w = w,
-          .h = h
-        };
-
-        info_print("vertical calculated child rect: w:%d h:%d", child->_rect.w, child->_rect.h);
-
-        y += h;
-
-        if (parent->has_padding)
-        {
-          y += 1;
-        }
-      }
-      else
-      {
-        y = parent->has_padding ? 2 : 1;
-
-        int h = parent->is_inflated ? align_size.h : child->_rect.h;
-
-        y += parent->pos * (align_size.h - h) / 2;
-
-        int w = child->_rect.w;
-
-        child->_rect = (tui_rect_t)
-        {
-          .x = x,
-          .y = y,
-          .w = w,
-          .h = h
-        };
-
-        info_print("horizontal calculated child rect: w:%d h:%d", child->_rect.w, child->_rect.h);
-
-        x += w;
-
-        if (parent->has_padding)
-        {
-          x += 2;
-        }
-      }
+      align_index++;
     }
     else
     {
       child->_rect = child->rect;
-
-      info_print("already child rect: w:%d h:%d", child->_rect.w, child->_rect.h);
     }
 
     // Move child window into parent window
