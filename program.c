@@ -9,6 +9,21 @@
 #include "debug.h"
 
 /*
+ *
+ */
+bool input_window_event(tui_window_t* window, int key)
+{
+  info_print("input_window_event: %d", key);
+
+  if (tui_input_event(window->data, key))
+  {
+    return true;
+  }
+
+  return false;
+}
+
+/*
  * Main function
  */
 int main(int argc, char* argv[])
@@ -68,7 +83,7 @@ int main(int argc, char* argv[])
     .pos = TUI_POS_CENTER,
   });
 
-  tui_window_text_create(tui, (tui_window_text_config_t)
+  tui_window_text_t* input_window = tui_window_text_create(tui, (tui_window_text_config_t)
   {
     .string = "This is some text",
     .rect = (tui_rect_t)
@@ -84,7 +99,12 @@ int main(int argc, char* argv[])
     },
     .pos = TUI_POS_END,
     .align = TUI_ALIGN_CENTER,
+    .event = &input_window_event
   });
+
+  tui_input_t* input = tui_input_create(10, input_window);
+
+  input_window->head.data = input;
 
 
   tui_window_parent_t* footer = tui_window_parent_create(tui, (tui_window_parent_config_t)
@@ -165,7 +185,7 @@ int main(int argc, char* argv[])
   char* lines[] =
   {
     "[+] Apple",
-    "[+] Pear",
+    "[+] Pear\nnewline",
     "[+] Banana"
   };
 
@@ -210,7 +230,7 @@ int main(int argc, char* argv[])
     {
       .x = 1,
       .y = 0,
-      .w = -2,
+      .w = TUI_PARENT_SIZE - 2,
       .h = 1
     },
     .color = (tui_color_t)
@@ -223,7 +243,7 @@ int main(int argc, char* argv[])
   {
     "[+] Keyboard",
     "[+] Mouse",
-    "[+] Computer",
+    "[+] Computer\nnewline",
     "[+] Case",
     "[+] Voltage",
     "[+] Fan"
@@ -244,6 +264,8 @@ int main(int argc, char* argv[])
   }
 
 
+  tui->window = (tui_window_t*) input_window;
+
   tui->is_running = true;
 
   tui_render(tui);
@@ -263,6 +285,8 @@ int main(int argc, char* argv[])
     tui_render(tui);
   }
 
+
+  tui_input_delete(&input);
 
   tui_delete(&tui);
 

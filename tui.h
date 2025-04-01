@@ -31,6 +31,8 @@
 #define KEY_ENTR  10
 #define KEY_TAB    9
 
+#define TUI_PARENT_SIZE 0
+
 /*
  * Declarations of tui structs
  */
@@ -150,9 +152,11 @@ typedef struct tui_input_t
   char*              buffer;
   size_t             buffer_size;
   size_t             buffer_len;
-
+  bool               secret;
+  bool               hidden;
   tui_window_text_t* window;
   char*              string; // Visable string
+  tui_t*             tui;
 } tui_input_t;
 
 /*
@@ -229,6 +233,16 @@ typedef struct tui_menu_t
 } tui_menu_t;
 
 /*
+ * Tui cursor
+ */
+typedef struct tui_cursor_t
+{
+  bool is_active;
+  int  x;
+  int  y;
+} tui_cursor_t;
+
+/*
  * Tui struct
  */
 typedef struct tui_t
@@ -241,6 +255,7 @@ typedef struct tui_t
   tui_menu_t*    menu;
   tui_window_t*  window;
   tui_color_t    color;
+  tui_cursor_t   cursor;
   tui_event_t    event;
   bool           is_running;
 } tui_t;
@@ -590,11 +605,55 @@ void tui_delete(tui_t** tui)
 }
 
 /*
- * Trigger tui events
+ * Trigger tui event
+ *
+ * Start by calling active window event handler
+ *
+ * If the event was handled, stop trigger events
+ *
+ * Otherwise, call parent event handler, and so on...
  */
-void tui_event(tui_t* tui, int key)
+bool tui_event(tui_t* tui, int key)
 {
+  info_print("tui_event (%d)", key);
 
+  tui_window_t* window = tui->window;
+
+  while (window)
+  {
+    if (window->event)
+    {
+      if (window->event(window, key))
+      {
+        return true;
+      }
+    }
+
+    window = (tui_window_t*) window->parent;
+  }
+
+  tui_menu_t* menu = tui->menu;
+
+  if (menu)
+  {
+    if (menu->event)
+    {
+      if (menu->event(menu, key))
+      {
+        return true;
+      }
+    }
+  }
+
+  if (tui->event)
+  {
+    if (tui->event(tui, key))
+    {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /*
@@ -745,6 +804,41 @@ static inline void tui_text_ws_get(int* ws, char* text, int h)
 }
 
 /*
+ * Set cursor to x y
+ */
+static inline void tui_cursor_set(tui_t* tui, int x, int y)
+{
+  info_print("Set cursor (%d, %d)", x, y);
+  tui->cursor = (tui_cursor_t)
+  {
+    .x = x,
+    .y = y,
+    .is_active = true
+  };
+}
+
+/*
+ * Extract ANSI code from string and increment index
+ */
+static inline char* tui_string_code_extract(char* string, size_t length, size_t* index)
+{
+  char* code = malloc(sizeof(char) * (length - *index + 1));
+
+  size_t code_len = 0;
+
+  (*index)++;
+
+  while (*index < length && string[*index] != 'm')
+  {
+    code[code_len++] = string[(*index)++];
+  }
+
+  code[code_len] = '\0';
+
+  return code;
+}
+
+/*
  * Render text in rect in window
  *
  * xpos determines if the text is aligned to the left, centered or right
@@ -774,11 +868,22 @@ static inline void tui_text_render(tui_window_text_t* window)
 
     int w = ws[y];
 
+    int x_shift = MAX(0, (float) window->align / 2.f * (rect.w - w));
+
     if (letter == '\033')
     {
-      while (index < length && window->string[index] != 'm') index++;
+      char* code = tui_string_code_extract(window->string, length, &index);
+
+      info_print("code: (%s)", code);
+
+      if (strcmp(code, "[5") == 0)
+      {
+        tui_cursor_set(head.tui, head._rect.x + x + x_shift, head._rect.y + y + y_shift);
+      }
+
+      free(code);
     }
-    if (letter == ' ' && x == 0)
+    else if (letter == ' ' && x == 0)
     {
       x = 0;
     }
@@ -790,8 +895,6 @@ static inline void tui_text_render(tui_window_text_t* window)
     }
     else
     {
-      int x_shift = MAX(0, (float) window->align / 2.f * (rect.w - w));
-
       if (y + y_shift < rect.h && x + x_shift < rect.w)
       {
         // info_print("mvwaddch(%d, %d, %c)", y_shift + y, x_shift + x, letter);
@@ -890,12 +993,14 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
  */
 static inline void tui_window_render(tui_window_t* window)
 {
+  /*
   info_print("tui_window_render: %s x:%d y:%d w:%d h:%d", window->name,
       window->_rect.x,
       window->_rect.y,
       window->_rect.w,
       window->_rect.h
   );
+  */
 
   // Unable to render if _rect is not calculated
   if (window->_rect.is_none)
@@ -1068,7 +1173,7 @@ static inline void tui_window_size_calc(tui_window_t* window)
     tui_window_parent_size_calc((tui_window_parent_t*) window);
   }
 
-  info_print("tui_window_size_calc %s w:%d h:%d", window->name, window->_rect.w, window->_rect.h);
+  // info_print("tui_window_size_calc %s w:%d h:%d", window->name, window->_rect.w, window->_rect.h);
 }
 
 /*
@@ -1534,6 +1639,19 @@ void tui_render(tui_t* tui)
   {
     tui_windows_render(menu->windows, menu->window_count);
   }
+
+  tui_cursor_t cursor = tui->cursor;
+
+  if (cursor.is_active)
+  {
+    if (cursor.y >= 0 && cursor.y < tui->size.h &&
+        cursor.x >= 0 && cursor.x < tui->size.w)
+    {
+      move(cursor.y, cursor.x);
+
+      curs_set(1);
+    }
+  }
 }
 
 /*
@@ -1552,6 +1670,7 @@ typedef struct tui_window_parent_config_t
   tui_align_t        align;
   bool               is_vertical;
   bool               is_inflated;
+  void*              data;
 } tui_window_parent_config_t;
 
 /*
@@ -1606,6 +1725,7 @@ typedef struct tui_window_text_config_t
   char*              string;
   tui_pos_t          pos;
   tui_align_t        align;
+  void*              data;
 } tui_window_text_config_t;
 
 /*
@@ -1801,6 +1921,175 @@ tui_window_text_t* tui_parent_child_text_create(tui_window_parent_t* parent, tui
   }
 
   return child;
+}
+
+/*
+ * Create input struct
+ */
+tui_input_t* tui_input_create(size_t size, tui_window_text_t* window)
+{
+  tui_input_t* input = malloc(sizeof(tui_input_t));
+
+  memset(input, 0, sizeof(tui_input_t));
+
+  input->buffer_size = size;
+
+
+  input->buffer = malloc(sizeof(char) * (size + 1));
+
+  memset(input->buffer, '\0', sizeof(char) * (size + 1));
+
+
+  input->string = strdup(input->buffer);
+
+  if (window)
+  {
+    input->window = window;
+
+    window->string = input->string;
+  }
+
+  return input;
+}
+
+/*
+ * Delete input struct
+ */
+void tui_input_delete(tui_input_t** input)
+{
+  if (!input || !(*input)) return;
+
+  free((*input)->buffer);
+
+  free((*input)->string);
+
+  free(*input);
+
+  *input = NULL;
+}
+
+/*
+ *
+ */
+static inline void tui_input_string_update(tui_input_t* input)
+{
+  strcpy(input->string, input->buffer);
+
+  strcpy(input->string + input->buffer_len, "\033[5m");
+}
+
+/*
+ * Add symbol to input buffer
+ */
+static inline bool tui_input_symbol_add(tui_input_t* input, char symbol)
+{
+  if (input->buffer_len >= input->buffer_size)
+  {
+    return false;
+  }
+
+  input->buffer[input->buffer_len] = symbol;
+
+  input->buffer_len++;
+
+  tui_input_string_update(input);
+
+  return true;
+}
+
+/*
+ * Delete symbol from input buffer
+ */
+static inline bool tui_input_symbol_del(tui_input_t* input)
+{
+  if (input->buffer_len <= 0)
+  {
+    return false;
+  }
+
+  input->buffer_len--;
+
+  input->buffer[input->buffer_len] = '\0';
+
+  tui_input_string_update(input);
+
+  return true;
+}
+
+/*
+ * Scroll right in input buffer
+ */
+static inline bool tui_input_scroll_right(tui_input_t* input)
+{
+  /*
+  // The cursor can not be further than the text itself
+  input->cursor = MIN(input->buffer_len, input->cursor + 1);
+
+  // The cursor is at the end of the input window
+  if((input->cursor - input->scroll) >= (input->head.w - 2))
+  {
+    input->scroll++; // Scroll one more character
+  }
+  */
+
+  return false;
+}
+
+/*
+ * Scroll left in input buffer
+ */
+static inline bool tui_input_scroll_left(tui_input_t* input)
+{
+  /*
+  input->cursor = MAX(0, input->cursor - 1);
+
+  // If the cursor is to the left of the window,
+  // scroll to the start of the cursor
+  if(input->cursor < input->scroll)
+  {
+    input->scroll = input->cursor;
+  }
+  */
+
+  return false;
+}
+
+/*
+ *
+ */
+bool tui_input_event(tui_input_t* input, int key)
+{
+  switch (key)
+  {
+    case KEY_CTRLH:
+      if (input->secret)
+      {
+        input->hidden = !input->hidden;
+        
+        return true;
+      }
+
+      return false;
+
+    case KEY_CTRLD:
+      // tui_input_buffer_clear(input);
+
+      return true;
+
+    case KEY_RIGHT:
+      return tui_input_scroll_right(input);
+
+    case KEY_LEFT:
+      return tui_input_scroll_left(input);
+
+    case KEY_BACKSPACE:
+      return tui_input_symbol_del(input);
+    
+    default:
+      return tui_input_symbol_add(input, key);
+  }
+
+  return false;
 }
 
 #endif // TUI_IMPLEMENT
