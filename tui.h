@@ -1164,7 +1164,14 @@ static inline void tui_align_rect_calc(tui_rect_t* rect, tui_window_parent_t* pa
     else if (parent->align == TUI_ALIGN_BETWEEN)
     {
       // Add this gap after current child
-      h_gap += h_space / (align_count - 1);
+      int gap = (float) h_space / (float) (align_count - 1);
+
+      h_gap += gap;
+
+      if (h_space - gap * (align_count - 1) > align_index)
+      {
+        h_gap += 1;
+      }
     }
     else if (parent->align == TUI_ALIGN_AROUND)
     {
@@ -1248,7 +1255,14 @@ static inline void tui_align_rect_calc(tui_rect_t* rect, tui_window_parent_t* pa
     else if (parent->align == TUI_ALIGN_BETWEEN)
     {
       // Add this gap after current child
-      w_gap += w_space / (align_count - 1);
+      int gap = (float) w_space / (float) (align_count - 1);
+
+      w_gap += gap;
+
+      if (w_space - gap * (align_count - 1) > align_index)
+      {
+        w_gap += 1;
+      }
     }
     else if (parent->align == TUI_ALIGN_AROUND)
     {

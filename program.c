@@ -75,7 +75,7 @@ int main(int argc, char* argv[])
     {
       .w = 0,
       .h = 2,
-      .y = -2
+      .y = -6
     },
     .color = (tui_color_t)
     {
@@ -85,6 +85,62 @@ int main(int argc, char* argv[])
     .pos = TUI_POS_END,
     .align = TUI_ALIGN_CENTER,
   });
+
+
+  tui_window_parent_t* footer = tui_window_parent_create(tui, (tui_window_parent_config_t)
+  {
+    .name = "footer",
+    .rect = (tui_rect_t)
+    {
+      .w = 0,
+      .h = 1,
+      .y = -1
+    },
+    .color = (tui_color_t)
+    {
+      .bg = TUI_COLOR_GREEN,
+      .fg = TUI_COLOR_MAGENTA
+    },
+    .border = (tui_border_t)
+    {
+      .is_active = false
+    },
+    .is_inflated = false,
+    .has_padding = true,
+    .pos = TUI_POS_CENTER,
+    .align = TUI_ALIGN_BETWEEN,
+  });
+
+  char* numbers[] =
+  {
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+  };
+
+  for (size_t index = 0; index < 9; index++)
+  {
+    tui_parent_child_text_create(footer, (tui_window_text_config_t)
+    {
+      .string = numbers[index],
+      .rect = TUI_RECT_NONE,
+      .color = (tui_color_t)
+      {
+        .bg = TUI_COLOR_WHITE,
+        .fg = TUI_COLOR_BLACK,
+      },
+      .align = TUI_POS_CENTER,
+      .pos = TUI_POS_CENTER,
+    });
+  }
+
+
 
 
   tui_window_parent_t* box = tui_parent_child_parent_create(parent, (tui_window_parent_config_t)
