@@ -152,6 +152,8 @@ typedef struct tui_input_t
   char*              buffer;
   size_t             buffer_size;
   size_t             buffer_len;
+  size_t             cursor;
+  size_t             scroll;
   bool               secret;
   bool               hidden;
   tui_window_text_t* window;
@@ -808,7 +810,6 @@ static inline void tui_text_ws_get(int* ws, char* text, int h)
  */
 static inline void tui_cursor_set(tui_t* tui, int x, int y)
 {
-  info_print("Set cursor (%d, %d)", x, y);
   tui->cursor = (tui_cursor_t)
   {
     .x = x,
@@ -848,6 +849,9 @@ static inline void tui_text_render(tui_window_text_t* window)
   tui_window_t head = window->head;
 
   tui_rect_t rect = head._rect;
+
+  info_print("window->text: %d", window->text);
+  info_print("Render text (%s)", window->text);
 
   int h = tui_text_h_get(window->text, rect.w);
 
@@ -916,11 +920,9 @@ static inline char* tui_text_extract(char* string)
 {
   if (!string) return NULL;
 
-  char* text = strdup(string);
-
   size_t length = strlen(string);
 
-  memset(text, '\0', sizeof(char) * (length + 1));
+  char* text = malloc(sizeof(char) * (length + 1));
 
   size_t text_len = 0;
 
@@ -1940,7 +1942,10 @@ tui_input_t* tui_input_create(size_t size, tui_window_text_t* window)
   memset(input->buffer, '\0', sizeof(char) * (size + 1));
 
 
-  input->string = strdup(input->buffer);
+  input->string = malloc(sizeof(char) * (size + 5));
+
+  memset(input->string, '\0', sizeof(char) * (size + 5));
+
 
   if (window)
   {
@@ -1973,9 +1978,23 @@ void tui_input_delete(tui_input_t** input)
  */
 static inline void tui_input_string_update(tui_input_t* input)
 {
-  strcpy(input->string, input->buffer);
+  size_t string_len = 0;
 
-  strcpy(input->string + input->buffer_len, "\033[5m");
+  for (size_t index = input->scroll; index < input->cursor; index++)
+  {
+    input->string[string_len++] = input->buffer[index];
+  }
+
+  strcpy(input->string + string_len, "\033[5m");
+
+  string_len += 4;
+
+  for (size_t index = input->cursor; index < input->buffer_len; index++)
+  {
+    input->string[string_len++] = input->buffer[index];
+  }
+
+  input->string[string_len] = '\0';
 }
 
 /*
@@ -1988,9 +2007,29 @@ static inline bool tui_input_symbol_add(tui_input_t* input, char symbol)
     return false;
   }
 
-  input->buffer[input->buffer_len] = symbol;
+  // Shift characters forward to make room for new character
+  for (size_t index = input->buffer_len + 1; index-- > input->cursor;)
+  {
+    input->buffer[index] = input->buffer[index - 1];
+  }
+
+  input->buffer[input->cursor] = symbol;
 
   input->buffer_len++;
+
+
+  if (input->cursor < input->buffer_len)
+  {
+    input->cursor++;
+  }
+
+  // The cursor is at the end of the input window
+  /*
+  if((win->cursor - win->scroll) >= (win->head.w - 2))
+  {
+    win->scroll++; // Scroll one more character
+  }
+  */
 
   tui_input_string_update(input);
 
@@ -2002,14 +2041,23 @@ static inline bool tui_input_symbol_add(tui_input_t* input, char symbol)
  */
 static inline bool tui_input_symbol_del(tui_input_t* input)
 {
-  if (input->buffer_len <= 0)
+  if (input->cursor <= 0 || input->buffer_len <= 0)
   {
     return false;
+  }
+
+  // Fill in the room left by the deleted character
+  for (size_t index = input->cursor - 1; index < input->buffer_len; index++)
+  {
+    input->buffer[index] = input->buffer[index + 1];
   }
 
   input->buffer_len--;
 
   input->buffer[input->buffer_len] = '\0';
+
+
+  input->cursor = MIN(input->cursor - 1, input->buffer_len);
 
   tui_input_string_update(input);
 
@@ -2021,16 +2069,13 @@ static inline bool tui_input_symbol_del(tui_input_t* input)
  */
 static inline bool tui_input_scroll_right(tui_input_t* input)
 {
-  /*
   // The cursor can not be further than the text itself
-  input->cursor = MIN(input->buffer_len, input->cursor + 1);
-
-  // The cursor is at the end of the input window
-  if((input->cursor - input->scroll) >= (input->head.w - 2))
+  if (input->cursor < input->buffer_len)
   {
-    input->scroll++; // Scroll one more character
+    input->cursor++;
   }
-  */
+
+  tui_input_string_update(input);
 
   return false;
 }
@@ -2040,16 +2085,19 @@ static inline bool tui_input_scroll_right(tui_input_t* input)
  */
 static inline bool tui_input_scroll_left(tui_input_t* input)
 {
-  /*
-  input->cursor = MAX(0, input->cursor - 1);
+  if (input->cursor > 0)
+  {
+    input->cursor--;
+  }
 
   // If the cursor is to the left of the window,
   // scroll to the start of the cursor
-  if(input->cursor < input->scroll)
+  if (input->cursor < input->scroll)
   {
     input->scroll = input->cursor;
   }
-  */
+
+  tui_input_string_update(input);
 
   return false;
 }

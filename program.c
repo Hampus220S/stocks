@@ -83,26 +83,47 @@ int main(int argc, char* argv[])
     .pos = TUI_POS_CENTER,
   });
 
-  tui_window_text_t* input_window = tui_window_text_create(tui, (tui_window_text_config_t)
+  tui_window_parent_t* banner = tui_window_parent_create(tui, (tui_window_parent_config_t)
   {
-    .string = "This is some text",
+    .name = "banner",
     .rect = (tui_rect_t)
     {
-      .w = 0,
-      .h = 2,
-      .y = -6
+      .w = TUI_PARENT_SIZE,
+      .h = 8,
+      .y = -12
     },
     .color = (tui_color_t)
     {
       .bg = TUI_COLOR_GREEN,
       .fg = TUI_COLOR_MAGENTA
     },
+    .border = (tui_border_t)
+    {
+      .is_active = true,
+      .color = TUI_COLOR_NONE
+    },
+    .is_inflated = false,
+    .has_padding = true,
+    .pos = TUI_POS_CENTER,
+    .align = TUI_ALIGN_CENTER
+  });
+
+
+  tui_window_text_t* input_window = tui_parent_child_text_create(banner, (tui_window_text_config_t)
+  {
+    .string = "This is some text",
+    .rect = TUI_RECT_NONE,
+    .color = (tui_color_t)
+    {
+      .bg = TUI_COLOR_CYAN,
+      .fg = TUI_COLOR_BLACK
+    },
     .pos = TUI_POS_END,
     .align = TUI_ALIGN_CENTER,
     .event = &input_window_event
   });
 
-  tui_input_t* input = tui_input_create(10, input_window);
+  tui_input_t* input = tui_input_create(100, input_window);
 
   input_window->head.data = input;
 
