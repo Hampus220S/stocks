@@ -154,6 +154,7 @@ typedef struct tui_window_t
   tui_color_t          _color; // Temp inherited color
   tui_window_event_t   event;
   tui_window_parent_t* parent;
+  tui_menu_t*          menu;
   tui_t*               tui;
   void*                data; // User attached data
 } tui_window_t;
@@ -1843,6 +1844,8 @@ tui_window_parent_t* tui_menu_window_parent_create(tui_menu_t* menu, tui_window_
     return NULL;
   }
 
+  window->head.menu = menu;
+
   if (tui_windows_window_append(&menu->windows, &menu->window_count, (tui_window_t*) window) != 0)
   {
     tui_window_parent_free(&window);
@@ -1910,6 +1913,8 @@ tui_window_text_t* tui_menu_window_text_create(tui_menu_t* menu, tui_window_text
   {
     return NULL;
   }
+
+  window->head.menu = menu;
 
   if (tui_windows_window_append(&menu->windows, &menu->window_count, (tui_window_t*) window) != 0)
   {
@@ -2253,7 +2258,7 @@ bool tui_list_event(tui_list_t* list, int key)
 }
 
 /*
- *
+ * Set window to active window
  */
 void tui_window_set(tui_t* tui, tui_window_t* window)
 {
@@ -2266,6 +2271,11 @@ void tui_window_set(tui_t* tui, tui_window_t* window)
 
   tui->window = window;
 
+  if (window->menu)
+  {
+    tui->menu = window->menu;
+  }
+
   if (window && window->event.enter)
   {
     window->event.enter(window);
@@ -2273,7 +2283,7 @@ void tui_window_set(tui_t* tui, tui_window_t* window)
 }
 
 /*
- *
+ * Set menu to active menu
  */
 void tui_menu_set(tui_t* tui, tui_menu_t* menu)
 {
@@ -2285,6 +2295,24 @@ void tui_menu_set(tui_t* tui, tui_menu_t* menu)
   }
 
   tui->menu = menu;
+
+  // If the active window is from another menu,
+  // choose a window in menu to set active
+  if (tui->window->menu && tui->window->menu != menu)
+  {
+    for (size_t index = 0; index < menu->window_count; index++)
+    {
+      tui_window_t* window = menu->windows[index];
+
+      // Change this to check if window is visable and interactive
+      if (window)
+      {
+        tui->window = window;
+
+        break;
+      }
+    }
+  }
 
   if (menu && menu->event.enter)
   {

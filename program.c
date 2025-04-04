@@ -378,9 +378,7 @@ int main(int argc, char* argv[])
     });
   }
 
-  tui_menu_set(tui, menu);
-
-  tui_window_set(tui, (tui_window_t*) footer);
+  tui_window_set(tui, (tui_window_t*) parent);
 
   tui->is_running = true;
 
