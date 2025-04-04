@@ -703,6 +703,11 @@ static inline int tui_text_h_get(char* text, int w)
 {
   size_t length = strlen(text);
 
+  if (length == 0 || w == 0)
+  {
+    return 0;
+  }
+
   int h = 1;
 
   int x = 0;
@@ -890,6 +895,12 @@ static inline void tui_text_render(tui_window_text_t* window)
 
   int h = tui_text_h_get(window->text, rect.w);
 
+  // If text can't be displayed, don't render
+  if (h <= 0)
+  {
+    return;
+  }
+
   int ws[h];
 
   tui_text_ws_get(ws, window->text, h);
@@ -1072,7 +1083,7 @@ static inline void tui_windows_render(tui_window_t** windows, size_t count)
  */
 static inline void tui_window_text_size_calc(tui_window_text_t* window)
 {
-  // Text window at least contain the cursor
+  // Text window contains at least the cursor
   window->head._rect = (tui_rect_t) { .w = 1, .h = 1 };
 
   free(window->text);
@@ -1997,6 +2008,17 @@ static inline void tui_input_string_update(tui_input_t* input)
     input->string[string_len++] = input->buffer[index];
   }
 
+  tui_window_t* window = input->tui->window;
+
+  // If the cursor is at the end of the string,
+  // and input text window is the active window,
+  // add space for cursor
+  if (input->cursor == input->buffer_len &&
+      window && (tui_window_t*) input->window == window)
+  {
+    input->string[string_len++] = ' ';
+  }
+
   input->string[string_len] = '\0';
 }
 
@@ -2021,7 +2043,7 @@ tui_input_t* tui_input_create(tui_t* tui, size_t size, tui_window_text_t* window
   memset(input->buffer, '\0', sizeof(char) * (size + 1));
 
 
-  input->string = malloc(sizeof(char) * (size + 5));
+  input->string = malloc(sizeof(char) * (size + 6));
 
   tui_input_string_update(input);
 
@@ -2340,21 +2362,23 @@ void tui_window_set(tui_t* tui, tui_window_t* window)
 {
   if (tui->window == window) return;
 
-  if (tui->window && tui->window->event.exit)
-  {
-    tui->window->event.exit(tui->window);
-  }
+  tui_window_t* last_window = tui->window;
 
   tui->window = window;
 
-  if (window->menu)
+  if (last_window && last_window->event.exit)
   {
-    tui->menu = window->menu;
+    last_window->event.exit(last_window);
   }
 
   if (window && window->event.enter)
   {
     window->event.enter(window);
+  }
+
+  if (window->menu)
+  {
+    tui->menu = window->menu;
   }
 }
 

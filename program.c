@@ -46,6 +46,24 @@ void side_item_exit(tui_window_t* window)
   window->color.bg = TUI_COLOR_NONE;
 }
 
+void side_text_enter(tui_window_t* window)
+{
+  tui_input_t* input = window->data;
+
+  input->cursor = input->buffer_len;
+
+  tui_input_string_update(input);
+}
+
+void side_text_exit(tui_window_t* window)
+{
+  tui_input_t* input = window->data;
+
+  input->cursor = input->buffer_len;
+
+  tui_input_string_update(input);
+}
+
 typedef struct side_data_t
 {
   tui_input_t* input;
@@ -187,6 +205,8 @@ int main(int argc, char* argv[])
   {
     .rect = TUI_RECT_NONE,
     .color.bg = TUI_COLOR_RED,
+    .event.enter = &side_text_enter,
+    .event.exit = &side_text_exit,
   });
 
   char* left_strings[] =
@@ -211,6 +231,8 @@ int main(int argc, char* argv[])
   side_data_t* left_data = malloc(sizeof(side_data_t));
 
   left_data->input = tui_input_create(tui, 100, left_text);
+
+  left_text->head.data = left_data->input;
 
   left_data->list = tui_list_create(tui, left->is_vertical);
 
@@ -240,6 +262,8 @@ int main(int argc, char* argv[])
   {
     .rect = TUI_RECT_NONE,
     .color.bg = TUI_COLOR_MAGENTA,
+    .event.enter = &side_text_enter,
+    .event.exit = &side_text_exit,
   });
 
   char* right_strings[] =
@@ -266,6 +290,8 @@ int main(int argc, char* argv[])
   side_data_t* right_data = malloc(sizeof(side_data_t));
 
   right_data->input = tui_input_create(tui, 100, right_text);
+
+  right_text->head.data = right_data->input;
 
   right_data->list  = tui_list_create(tui, right->is_vertical);
 
