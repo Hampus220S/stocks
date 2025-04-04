@@ -166,9 +166,10 @@ typedef struct tui_input_t
  */
 typedef struct tui_list_t
 {
-  tui_window_t* windows;
-  size_t        window_count;
-  size_t        window_index;
+  tui_window_t** windows;
+  size_t         count;
+  size_t         index;
+  bool           is_vertical;
 } tui_list_t;
 
 /*
@@ -1055,7 +1056,7 @@ static inline void tui_window_text_size_calc(tui_window_text_t* window)
       .h = MAX(0, window->head.rect.h)
     };
   }
-  else if (window->text)
+  else if (window->text && strlen(window->text) > 0)
   {
     int h = tui_text_h_get(window->text, window->head.tui->size.w);
 
@@ -1063,6 +1064,8 @@ static inline void tui_window_text_size_calc(tui_window_text_t* window)
 
     window->head._rect = (tui_rect_t) { .w = w, .h = h};
   }
+
+  // info_print("tui_window_text_size_calc(%s) w:%d h:%d", window->head.name, window->head._rect.w, window->head._rect.h);
 }
 
 static inline void tui_window_size_calc(tui_window_t* window);
@@ -2135,6 +2138,117 @@ bool tui_input_event(tui_input_t* input, int key)
     
     default:
       return tui_input_symbol_add(input, key);
+  }
+
+  return false;
+}
+
+/*
+ * Create list struct
+ */
+tui_list_t* tui_list_create(tui_window_t** windows, size_t count)
+{
+  tui_list_t* list = malloc(sizeof(tui_list_t));
+
+  if (!list)
+  {
+    return NULL;
+  }
+
+  memset(list, 0, sizeof(tui_list_t));
+
+  list->windows = windows;
+  list->count   = count;
+
+  return list;
+}
+
+/*
+ * Delete list struct
+ */
+void tui_list_delete(tui_list_t** list)
+{
+  if (!list || !(*list)) return;
+
+  free(*list);
+
+  *list = NULL;
+}
+
+/*
+ *
+ */
+static inline bool tui_list_scroll_forward(tui_list_t* list)
+{
+  if (list->index >= (list->count - 1))
+  {
+    return false;
+  }
+
+  info_print("Scroll forward");
+
+  list->index++;
+
+  return true;
+}
+
+/*
+ *
+ */
+static inline bool tui_list_scroll_back(tui_list_t* list)
+{
+  if (list->index <= 0)
+  {
+    return false;
+  }
+
+  info_print("Scroll back");
+
+  list->index--;
+
+  return true;
+}
+
+/*
+ * Handle list event
+ */
+bool tui_list_event(tui_list_t* list, int key)
+{
+  if (list->is_vertical)
+  {
+    switch (key)
+    {
+      case KEY_UP:
+        tui_list_scroll_forward(list);
+
+        return true;
+
+      case KEY_DOWN:
+        tui_list_scroll_back(list);
+
+        return true;
+
+      default:
+        break;
+    }
+  }
+  else
+  {
+    switch (key)
+    {
+      case KEY_RIGHT:
+        tui_list_scroll_forward(list);
+
+        return true;
+
+      case KEY_LEFT:
+        tui_list_scroll_back(list);
+
+        return true;
+
+      default:
+        break;
+    }
   }
 
   return false;

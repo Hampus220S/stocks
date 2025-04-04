@@ -24,6 +24,30 @@ bool input_window_event(tui_window_t* window, int key)
 }
 
 /*
+ *
+ */
+bool footer_event(tui_window_t* window, int key)
+{
+  info_print("footer_event: %d", key);
+
+  tui_list_t* list = window->data;
+
+  if (list)
+  {
+    if (tui_list_event(list, key))
+    {
+      tui_window_t* window = list->windows[list->index];
+
+      window->color.bg = TUI_COLOR_BLUE;
+
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/*
  * Main function
  */
 int main(int argc, char* argv[])
@@ -111,7 +135,8 @@ int main(int argc, char* argv[])
 
   tui_window_text_t* input_window = tui_parent_child_text_create(banner, (tui_window_text_config_t)
   {
-    .string = "This is some text",
+    .name = "input",
+    .string = "?",
     .rect = TUI_RECT_NONE,
     .color = (tui_color_t)
     {
@@ -123,9 +148,9 @@ int main(int argc, char* argv[])
     .event = &input_window_event
   });
 
-  tui_input_t* input = tui_input_create(100, input_window);
+  // tui_input_t* input = tui_input_create(100, input_window);
 
-  input_window->head.data = input;
+  // input_window->head.data = input;
 
 
   tui_window_parent_t* footer = tui_window_parent_create(tui, (tui_window_parent_config_t)
@@ -150,6 +175,7 @@ int main(int argc, char* argv[])
     .has_padding = true,
     .pos = TUI_POS_CENTER,
     .align = TUI_ALIGN_BETWEEN,
+    .event = &footer_event
   });
 
   char* numbers[] =
@@ -181,6 +207,9 @@ int main(int argc, char* argv[])
     });
   }
 
+  tui_list_t* list = tui_list_create(footer->children, footer->child_count);
+
+  footer->head.data = list;
 
 
 
@@ -285,7 +314,7 @@ int main(int argc, char* argv[])
   }
 
 
-  tui->window = (tui_window_t*) input_window;
+  tui->window = (tui_window_t*) footer;
 
   tui->is_running = true;
 
@@ -307,7 +336,9 @@ int main(int argc, char* argv[])
   }
 
 
-  tui_input_delete(&input);
+  // tui_input_delete(&input);
+  
+  tui_list_delete(&list);
 
   tui_delete(&tui);
 
