@@ -78,11 +78,21 @@ void footer_number_exit_event(tui_window_t* window)
 /*
  *
  */
-bool footer_number_key_event(tui_window_t* window, int key)
+bool footer_number_key_event(tui_window_t* head, int key)
 {
+  info_print("footer number h:%d key:%d", 'h', key);
+
   if (key == KEY_ENTR)
   {
-    window->color.bg = TUI_COLOR_RED;
+    head->color.bg = TUI_COLOR_RED;
+    
+    return true;
+  }
+  else if (key == 'h')
+  {
+    tui_window_text_t* window = (tui_window_text_t*) head;
+
+    window->is_secret = !window->is_secret;
     
     return true;
   }
@@ -368,7 +378,7 @@ int main(int argc, char* argv[])
 
   int key;
 
-  while (tui->is_running && (key = wgetch(stdscr)))
+  while (tui->is_running && (key = getch()))
   {
     if (key == KEY_CTRLS)
     {

@@ -170,8 +170,6 @@ typedef struct tui_input_t
   size_t             buffer_len;
   size_t             cursor;
   size_t             scroll;
-  bool               secret;
-  bool               hidden;
   tui_window_text_t* window;
   char*              string; // Visable string
   tui_t*             tui;
@@ -219,6 +217,7 @@ typedef struct tui_window_text_t
   tui_window_t head;
   char*        string;
   char*        text;
+  bool         is_secret;
   tui_pos_t    pos;
   tui_align_t  align;
 } tui_window_text_t;
@@ -919,6 +918,11 @@ static inline void tui_text_render(tui_window_text_t* window)
       if (y + y_shift < rect.h && x + x_shift < rect.w)
       {
         // info_print("mvwaddch(%d, %d, %c)", y_shift + y, x_shift + x, letter);
+
+        if (window->is_secret)
+        {
+          letter = '*';
+        }
 
         mvwaddch(head.window, y_shift + y, x_shift + x, letter);
       }
@@ -1744,6 +1748,7 @@ typedef struct tui_window_text_config_t
   tui_color_t        color;
   bool               is_visable;
   char*              string;
+  bool               is_secret;
   tui_pos_t          pos;
   tui_align_t        align;
   void*              data;
@@ -1776,10 +1781,11 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_
 
   *window = (tui_window_text_t)
   {
-    .head   = head,
-    .string = config.string,
-    .pos    = config.pos,
-    .align  = config.align
+    .head      = head,
+    .string    = config.string,
+    .is_secret = config.is_secret,
+    .pos       = config.pos,
+    .align     = config.align
   };
 
   return window;
@@ -2128,21 +2134,6 @@ bool tui_input_event(tui_input_t* input, int key)
 {
   switch (key)
   {
-    case KEY_CTRLH:
-      if (input->secret)
-      {
-        input->hidden = !input->hidden;
-        
-        return true;
-      }
-
-      return false;
-
-    case KEY_CTRLD:
-      // tui_input_buffer_clear(input);
-
-      return true;
-
     case KEY_RIGHT:
       return tui_input_scroll_right(input);
 
