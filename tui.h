@@ -3,7 +3,7 @@
  *
  * Written by Hampus Fridholm
  *
- * Last updated: 2025-03-19
+ * Last updated: 2025-04-04
  *
  * This library depends on debug.h
  */
@@ -300,7 +300,7 @@ static inline short tui_color_index_get(tui_color_t color)
 /*
  * Inherit color from parent in case of transparency
  */
-static inline tui_color_t tui_window_color_inherit(tui_window_t* window, tui_color_t color)
+static inline tui_color_t tui_window_color_inherit(tui_t* tui, tui_window_t* window, tui_color_t color)
 {
   // If color has no transparency, it don't need to inherit
   if (color.fg != TUI_COLOR_NONE && color.bg != TUI_COLOR_NONE)
@@ -308,29 +308,27 @@ static inline tui_color_t tui_window_color_inherit(tui_window_t* window, tui_col
     return color;
   }
 
-  // Get color of parent
-  tui_window_t* parent = (tui_window_t*) window->parent;
+  // Get inherit color
+  tui_color_t inherit_color = { 0 };
 
-  tui_color_t parent_color;
-
-  if (parent)
+  if (window)
   {
-    parent_color = parent->_color;
+    inherit_color = window->_color;
   }
-  else
+  else if (tui)
   {
-    parent_color = window->tui->color;
+    inherit_color = tui->color;
   }
 
-  // Inherit color from parent
+  // Apply inherit color in case of transparency
   if (color.fg == TUI_COLOR_NONE)
   {
-    color.fg = parent_color.fg;
+    color.fg = inherit_color.fg;
   }
 
   if (color.bg == TUI_COLOR_NONE)
   {
-    color.bg = parent_color.bg;
+    color.bg = inherit_color.bg;
   }
 
   return color;
@@ -341,7 +339,7 @@ static inline tui_color_t tui_window_color_inherit(tui_window_t* window, tui_col
  */
 static inline void tui_window_fill(tui_window_t* window)
 {
-  window->_color = tui_window_color_inherit(window, window->color);
+  window->_color = tui_window_color_inherit(window->tui, (tui_window_t*) window->parent, window->color);
 
   wbkgd(window->window, COLOR_PAIR(tui_color_index_get(window->_color)));
 }
@@ -366,7 +364,7 @@ void tui_border_draw(tui_window_parent_t* window)
 
   tui_window_t head = window->head;
 
-  tui_color_t color = tui_window_color_inherit((tui_window_t*) window, border.color);
+  tui_color_t color = tui_window_color_inherit(head.tui, (tui_window_t*) window, border.color);
 
   wattron(head.window, COLOR_PAIR(tui_color_index_get(color)));
 
@@ -633,18 +631,13 @@ void tui_delete(tui_t** tui)
  */
 bool tui_event(tui_t* tui, int key)
 {
-  info_print("tui_event (%d)", key);
-
   tui_window_t* window = tui->window;
 
   while (window)
   {
-    if (window->event.key)
+    if (window->event.key && window->event.key(window, key))
     {
-      if (window->event.key(window, key))
-      {
-        return true;
-      }
+      return true;
     }
 
     window = (tui_window_t*) window->parent;
@@ -654,21 +647,15 @@ bool tui_event(tui_t* tui, int key)
 
   if (menu)
   {
-    if (menu->event.key)
-    {
-      if (menu->event.key(menu, key))
-      {
-        return true;
-      }
-    }
-  }
-
-  if (tui->event.key)
-  {
-    if (tui->event.key(tui, key))
+    if (menu->event.key && menu->event.key(menu, key))
     {
       return true;
     }
+  }
+
+  if (tui->event.key && tui->event.key(tui, key))
+  {
+    return true;
   }
 
   return false;
@@ -866,9 +853,6 @@ static inline void tui_text_render(tui_window_text_t* window)
 
   tui_rect_t rect = head._rect;
 
-  info_print("window->text: %d", window->text);
-  info_print("Render text (%s)", window->text);
-
   int h = tui_text_h_get(window->text, rect.w);
 
   int ws[h];
@@ -894,8 +878,6 @@ static inline void tui_text_render(tui_window_text_t* window)
     {
       char* code = tui_string_code_extract(window->string, length, &index);
 
-      info_print("code: (%s)", code);
-
       if (strcmp(code, "[5") == 0)
       {
         tui_cursor_set(head.tui, head._rect.x + x + x_shift, head._rect.y + y + y_shift);
@@ -917,8 +899,6 @@ static inline void tui_text_render(tui_window_text_t* window)
     {
       if (y + y_shift < rect.h && x + x_shift < rect.w)
       {
-        // info_print("mvwaddch(%d, %d, %c)", y_shift + y, x_shift + x, letter);
-
         if (window->is_secret)
         {
           letter = '*';
@@ -1016,15 +996,6 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
  */
 static inline void tui_window_render(tui_window_t* window)
 {
-  /*
-  info_print("tui_window_render: %s x:%d y:%d w:%d h:%d", window->name,
-      window->_rect.x,
-      window->_rect.y,
-      window->_rect.w,
-      window->_rect.h
-  );
-  */
-
   // Unable to render if _rect is not calculated
   if (window->_rect.is_none)
   {
@@ -1084,8 +1055,6 @@ static inline void tui_window_text_size_calc(tui_window_text_t* window)
 
     window->head._rect = (tui_rect_t) { .w = w, .h = h};
   }
-
-  // info_print("tui_window_text_size_calc(%s) w:%d h:%d", window->head.name, window->head._rect.w, window->head._rect.h);
 }
 
 static inline void tui_window_size_calc(tui_window_t* window);
@@ -1197,8 +1166,6 @@ static inline void tui_window_size_calc(tui_window_t* window)
   {
     tui_window_parent_size_calc((tui_window_parent_t*) window);
   }
-
-  // info_print("tui_window_size_calc %s w:%d h:%d", window->name, window->_rect.w, window->_rect.h);
 }
 
 /*
@@ -2192,8 +2159,6 @@ static inline bool tui_list_scroll_forward(tui_list_t* list)
     return false;
   }
 
-  info_print("Scroll forward");
-
   list->index++;
 
   return true;
@@ -2208,8 +2173,6 @@ static inline bool tui_list_scroll_back(tui_list_t* list)
   {
     return false;
   }
-
-  info_print("Scroll back");
 
   list->index--;
 
@@ -2268,22 +2231,16 @@ void tui_window_set(tui_t* tui, tui_window_t* window)
 {
   if (tui->window == window) return;
 
-  if (tui->window)
+  if (tui->window && tui->window->event.exit)
   {
-    if (tui->window->event.exit)
-    {
-      tui->window->event.exit(tui->window);
-    }
+    tui->window->event.exit(tui->window);
   }
 
   tui->window = window;
 
-  if (window)
+  if (window && window->event.enter)
   {
-    if (window->event.enter)
-    {
-      window->event.enter(window);
-    }
+    window->event.enter(window);
   }
 }
 

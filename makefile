@@ -1,6 +1,6 @@
 COMPILER := gcc
 
-COMPILE_FLAGS := -Wall -g -O0 -std=gnu99 -oFast
+COMPILE_FLAGS := -Wall -g -O0 -std=gnu99 -oFast -Wno-missing-braces
 LINKER_FLAGS := -lm -lgmp -lncursesw
 
 program: program.c tui.h

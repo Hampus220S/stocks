@@ -122,7 +122,6 @@ int main(int argc, char* argv[])
   {
     .color = (tui_color_t)
     {
-      .bg = TUI_COLOR_BLACK,
       .fg = TUI_COLOR_WHITE
     }
   });
@@ -147,7 +146,7 @@ int main(int argc, char* argv[])
     .rect = TUI_RECT_NONE,
     .color = (tui_color_t)
     {
-      .bg = TUI_COLOR_GREEN,
+      .bg = TUI_COLOR_NONE,
       .fg = TUI_COLOR_MAGENTA
     },
     .border = (tui_border_t)
@@ -171,7 +170,7 @@ int main(int argc, char* argv[])
     },
     .color = (tui_color_t)
     {
-      .bg = TUI_COLOR_GREEN,
+      .bg = TUI_COLOR_NONE,
       .fg = TUI_COLOR_MAGENTA
     },
     .border = (tui_border_t)
@@ -193,7 +192,7 @@ int main(int argc, char* argv[])
     .rect = TUI_RECT_NONE,
     .color = (tui_color_t)
     {
-      .bg = TUI_COLOR_CYAN,
+      .bg = TUI_COLOR_NONE,
       .fg = TUI_COLOR_BLACK
     },
     .pos = TUI_POS_END,
@@ -217,7 +216,7 @@ int main(int argc, char* argv[])
     },
     .color = (tui_color_t)
     {
-      .bg = TUI_COLOR_GREEN,
+      .bg = TUI_COLOR_NONE,
       .fg = TUI_COLOR_MAGENTA
     },
     .border = (tui_border_t)
@@ -380,9 +379,10 @@ int main(int argc, char* argv[])
 
   while (tui->is_running && (key = getch()))
   {
-    if (key == KEY_CTRLS)
+    if (key == KEY_CTRLC)
     {
       tui->is_running = false;
+
       break;
     }
 
