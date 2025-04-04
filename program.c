@@ -28,7 +28,7 @@ bool panel_window_key(tui_window_t* panel, int key)
 
   if (tui_list_event(list, key))
   {
-    tui_window_set(panel->tui, list->windows[list->index]);
+    tui_window_set(panel->tui, list->items[list->item_index]);
 
     return true;
   }
@@ -54,13 +54,11 @@ typedef struct side_data_t
 
 void side_window_enter(tui_window_t* window)
 {
-  window->color.bg = TUI_COLOR_RED;
-
   side_data_t* data = window->data;
 
   tui_list_t* list = data->list;
 
-  tui_window_set(window->tui, list->windows[list->index]);
+  tui_window_set(window->tui, list->items[list->item_index]);
 }
 
 void side_window_exit(tui_window_t* window)
@@ -91,7 +89,7 @@ bool side_window_key(tui_window_t* head, int key)
   if (tui_list_event(list, key))
   {
     info_print("list event done");
-    tui_window_t* child = list->windows[list->index];
+    tui_window_t* child = list->items[list->item_index];
 
     tui_window_set(head->tui, child);
   }
@@ -166,7 +164,7 @@ int main(int argc, char* argv[])
     {
       .is_active = true,
     },
-    .has_padding = false,
+    .has_padding = true,
     .event.key = &panel_window_key,
     .event.enter = &panel_window_enter,
   });
@@ -182,6 +180,13 @@ int main(int argc, char* argv[])
     .event.enter = &side_window_enter,
     .event.exit = &side_window_exit,
     .event.key = &side_window_key,
+    .is_inflated = false,
+  });
+
+  tui_window_text_t* left_text = tui_parent_child_text_create(left, (tui_window_text_config_t)
+  {
+    .rect = TUI_RECT_NONE,
+    .color.bg = TUI_COLOR_RED,
   });
 
   char* left_strings[] =
@@ -205,9 +210,14 @@ int main(int argc, char* argv[])
 
   side_data_t* left_data = malloc(sizeof(side_data_t));
 
-  left_data->input = tui_input_create(100, NULL);
+  left_data->input = tui_input_create(tui, 100, left_text);
 
-  left_data->list = tui_list_create(left->is_vertical, left->children, left->child_count);
+  left_data->list = tui_list_create(tui, left->is_vertical);
+
+  for (size_t index = 0; index < left->child_count; index++)
+  {
+    tui_list_item_add(left_data->list, left->children[index]);
+  }
 
   left->head.data = left_data;
 
@@ -223,6 +233,13 @@ int main(int argc, char* argv[])
     .event.enter = &side_window_enter,
     .event.exit = &side_window_exit,
     .event.key = &side_window_key,
+    .is_inflated = false,
+  });
+
+  tui_window_text_t* right_text = tui_parent_child_text_create(right, (tui_window_text_config_t)
+  {
+    .rect = TUI_RECT_NONE,
+    .color.bg = TUI_COLOR_MAGENTA,
   });
 
   char* right_strings[] =
@@ -248,13 +265,24 @@ int main(int argc, char* argv[])
 
   side_data_t* right_data = malloc(sizeof(side_data_t));
 
-  right_data->input = tui_input_create(100, NULL);
-  right_data->list  = tui_list_create(right->is_vertical, right->children, right->child_count);
+  right_data->input = tui_input_create(tui, 100, right_text);
+
+  right_data->list  = tui_list_create(tui, right->is_vertical);
+
+  for (size_t index = 0; index < right->child_count; index++)
+  {
+    tui_list_item_add(right_data->list, right->children[index]);
+  }
 
   right->head.data = right_data;
 
 
-  tui_list_t* list = tui_list_create(panel->is_vertical, panel->children, panel->child_count);
+  tui_list_t* list = tui_list_create(tui, panel->is_vertical);
+
+  for (size_t index = 0; index < panel->child_count; index++)
+  {
+    tui_list_item_add(list, panel->children[index]);
+  }
 
   panel->head.data = list;
 
@@ -283,6 +311,9 @@ int main(int argc, char* argv[])
   tui_input_delete(&right_data->input);
 
   free(right_data);
+
+
+  tui_list_delete(&list);
 
 
   tui_delete(&tui);

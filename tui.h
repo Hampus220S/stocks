@@ -183,10 +183,11 @@ typedef struct tui_input_t
  */
 typedef struct tui_list_t
 {
-  tui_window_t** windows;
-  size_t         count;
-  size_t         index;
+  tui_window_t** items;
+  size_t         item_count;
+  size_t         item_index;
   bool           is_vertical;
+  tui_t*         tui;
 } tui_list_t;
 
 /*
@@ -455,6 +456,12 @@ void tui_quit(void)
  */
 static inline WINDOW* tui_ncurses_window_create(tui_rect_t rect)
 {
+  // Can't create window with no size
+  if (rect.w == 0 || rect.h == 0)
+  {
+    return NULL;
+  }
+
   WINDOW* window = newwin(rect.h, rect.w, rect.y, rect.x);
 
   if (!window)
@@ -472,6 +479,12 @@ static inline WINDOW* tui_ncurses_window_create(tui_rect_t rect)
  */
 static inline WINDOW* tui_ncurses_window_resize(WINDOW* window, tui_rect_t rect)
 {
+  // Don't resize window to no size
+  if (rect.w == 0 || rect.h == 0)
+  {
+    return window;
+  }
+
   wresize(window, rect.h, rect.w);
 
   mvwin(window, rect.y, rect.x);
@@ -902,7 +915,11 @@ static inline void tui_text_render(tui_window_text_t* window)
 
       if (strcmp(code, "[5") == 0)
       {
-        tui_cursor_set(head.tui, head._rect.x + x + x_shift, head._rect.y + y + y_shift);
+        // Only set the cursor if the text window is the active window
+        if (head.tui->window == (tui_window_t*) window)
+        {
+          tui_cursor_set(head.tui, head._rect.x + x + x_shift, head._rect.y + y + y_shift);
+        }
       }
 
       free(code);
@@ -1055,7 +1072,8 @@ static inline void tui_windows_render(tui_window_t** windows, size_t count)
  */
 static inline void tui_window_text_size_calc(tui_window_text_t* window)
 {
-  window->head._rect = (tui_rect_t) { 0 };
+  // Text window at least contain the cursor
+  window->head._rect = (tui_rect_t) { .w = 1, .h = 1 };
 
   free(window->text);
 
@@ -1631,6 +1649,8 @@ static inline void tui_resize(tui_t* tui)
  */
 void tui_render(tui_t* tui)
 {
+  tui->cursor.is_active = false;
+
   curs_set(0);
 
   // 1. Resize every window to account for content
@@ -1659,6 +1679,12 @@ void tui_render(tui_t* tui)
   if (menu)
   {
     tui_windows_render(menu->windows, menu->window_count);
+  }
+
+  // Render the active window over all other windows
+  if (tui->window)
+  {
+    tui_window_render(tui->window);
   }
 
   tui_cursor_t cursor = tui->cursor;
@@ -1951,15 +1977,43 @@ tui_window_text_t* tui_parent_child_text_create(tui_window_parent_t* parent, tui
 }
 
 /*
+ *
+ */
+static inline void tui_input_string_update(tui_input_t* input)
+{
+  size_t string_len = 0;
+
+  for (size_t index = input->scroll; index < input->cursor; index++)
+  {
+    input->string[string_len++] = input->buffer[index];
+  }
+
+  strcpy(input->string + string_len, "\033[5m");
+
+  string_len += 4;
+
+  for (size_t index = input->cursor; index < input->buffer_len; index++)
+  {
+    input->string[string_len++] = input->buffer[index];
+  }
+
+  input->string[string_len] = '\0';
+}
+
+/*
  * Create input struct
  */
-tui_input_t* tui_input_create(size_t size, tui_window_text_t* window)
+tui_input_t* tui_input_create(tui_t* tui, size_t size, tui_window_text_t* window)
 {
   tui_input_t* input = malloc(sizeof(tui_input_t));
 
   memset(input, 0, sizeof(tui_input_t));
 
-  input->buffer_size = size;
+  *input = (tui_input_t)
+  {
+    .buffer_size = size,
+    .tui         = tui,
+  };
 
 
   input->buffer = malloc(sizeof(char) * (size + 1));
@@ -1969,7 +2023,7 @@ tui_input_t* tui_input_create(size_t size, tui_window_text_t* window)
 
   input->string = malloc(sizeof(char) * (size + 5));
 
-  memset(input->string, '\0', sizeof(char) * (size + 5));
+  tui_input_string_update(input);
 
 
   if (window)
@@ -1996,30 +2050,6 @@ void tui_input_delete(tui_input_t** input)
   free(*input);
 
   *input = NULL;
-}
-
-/*
- *
- */
-static inline void tui_input_string_update(tui_input_t* input)
-{
-  size_t string_len = 0;
-
-  for (size_t index = input->scroll; index < input->cursor; index++)
-  {
-    input->string[string_len++] = input->buffer[index];
-  }
-
-  strcpy(input->string + string_len, "\033[5m");
-
-  string_len += 4;
-
-  for (size_t index = input->cursor; index < input->buffer_len; index++)
-  {
-    input->string[string_len++] = input->buffer[index];
-  }
-
-  input->string[string_len] = '\0';
 }
 
 /*
@@ -2099,17 +2129,19 @@ static inline bool tui_input_symbol_del(tui_input_t* input)
  */
 static inline bool tui_input_scroll_right(tui_input_t* input)
 {
-  // If no text window is attached, scrolling is disabled
-  if (!input->window)
+  // If input text window is not the active window, scrolling is disabled
+  if (!input->window || input->tui->window != (tui_window_t*) input->window)
   {
     return false;
   }
 
   // The cursor can not be further than the text itself
-  if (input->cursor < input->buffer_len)
+  if (input->cursor >= input->buffer_len)
   {
-    input->cursor++;
+    return false;
   }
+
+  input->cursor++;
 
   tui_input_string_update(input);
 
@@ -2121,16 +2153,19 @@ static inline bool tui_input_scroll_right(tui_input_t* input)
  */
 static inline bool tui_input_scroll_left(tui_input_t* input)
 {
-  // If no text window is attached, scrolling is disabled
-  if (!input->window)
+  // If input text window is not the active window, scrolling is disabled
+  if (!input->window || input->tui->window != (tui_window_t*) input->window)
   {
     return false;
   }
 
-  if (input->cursor > 0)
+  // Can't scroll past the beginning
+  if (input->cursor == 0)
   {
-    input->cursor--;
+    return false;
   }
+
+  input->cursor--;
 
   // If the cursor is to the left of the window,
   // scroll to the start of the cursor
@@ -2168,9 +2203,28 @@ bool tui_input_event(tui_input_t* input, int key)
 }
 
 /*
+ * Add item to list
+ */
+int tui_list_item_add(tui_list_t* list, tui_window_t* item)
+{
+  tui_window_t** temp_items = realloc(list->items, sizeof(tui_window_t*) * (list->item_count + 1));
+
+  if (!temp_items)
+  {
+    return 1;
+  }
+
+  list->items = temp_items;
+
+  list->items[list->item_count++] = item;
+
+  return 0;
+}
+
+/*
  * Create list struct
  */
-tui_list_t* tui_list_create(bool is_vertical, tui_window_t** windows, size_t count)
+tui_list_t* tui_list_create(tui_t* tui, bool is_vertical)
 {
   tui_list_t* list = malloc(sizeof(tui_list_t));
 
@@ -2181,10 +2235,11 @@ tui_list_t* tui_list_create(bool is_vertical, tui_window_t** windows, size_t cou
 
   memset(list, 0, sizeof(tui_list_t));
 
-  list->is_vertical = is_vertical;
-
-  list->windows = windows;
-  list->count   = count;
+  *list = (tui_list_t)
+  {
+    .is_vertical = is_vertical,
+    .tui         = tui,
+  };
 
   return list;
 }
@@ -2196,6 +2251,8 @@ void tui_list_delete(tui_list_t** list)
 {
   if (!list || !(*list)) return;
 
+  free((*list)->items);
+
   free(*list);
 
   *list = NULL;
@@ -2206,12 +2263,12 @@ void tui_list_delete(tui_list_t** list)
  */
 static inline bool tui_list_scroll_forward(tui_list_t* list)
 {
-  if (list->index >= (list->count - 1))
+  if (list->item_index >= (list->item_count - 1))
   {
     return false;
   }
 
-  list->index++;
+  list->item_index++;
 
   return true;
 }
@@ -2221,12 +2278,12 @@ static inline bool tui_list_scroll_forward(tui_list_t* list)
  */
 static inline bool tui_list_scroll_back(tui_list_t* list)
 {
-  if (list->index <= 0)
+  if (list->item_index <= 0)
   {
     return false;
   }
 
-  list->index--;
+  list->item_index--;
 
   return true;
 }
