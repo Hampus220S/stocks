@@ -2094,6 +2094,12 @@ static inline bool tui_input_symbol_del(tui_input_t* input)
  */
 static inline bool tui_input_scroll_right(tui_input_t* input)
 {
+  // If no text window is attached, scrolling is disabled
+  if (!input->window)
+  {
+    return false;
+  }
+
   // The cursor can not be further than the text itself
   if (input->cursor < input->buffer_len)
   {
@@ -2102,7 +2108,7 @@ static inline bool tui_input_scroll_right(tui_input_t* input)
 
   tui_input_string_update(input);
 
-  return false;
+  return true;
 }
 
 /*
@@ -2110,6 +2116,12 @@ static inline bool tui_input_scroll_right(tui_input_t* input)
  */
 static inline bool tui_input_scroll_left(tui_input_t* input)
 {
+  // If no text window is attached, scrolling is disabled
+  if (!input->window)
+  {
+    return false;
+  }
+
   if (input->cursor > 0)
   {
     input->cursor--;
@@ -2124,7 +2136,7 @@ static inline bool tui_input_scroll_left(tui_input_t* input)
 
   tui_input_string_update(input);
 
-  return false;
+  return true;
 }
 
 /*
