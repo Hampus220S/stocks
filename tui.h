@@ -58,7 +58,9 @@ typedef struct tui_window_event_t
  */
 typedef struct tui_menu_event_t
 {
-  bool (*key)(tui_menu_t* menu, int key);
+  bool (*key)  (tui_menu_t* menu, int key);
+  void (*enter)(tui_menu_t* menu);
+  void (*exit) (tui_menu_t* menu);
 } tui_menu_event_t;
 
 /*
@@ -244,6 +246,8 @@ typedef struct tui_window_parent_t
 typedef struct tui_menu_t
 {
   char*            name;
+  tui_color_t      color;
+  tui_color_t      _color;
   tui_window_t**   windows;
   size_t           window_count;
   tui_menu_event_t event;
@@ -298,9 +302,9 @@ static inline short tui_color_index_get(tui_color_t color)
 }
 
 /*
- * Inherit color from parent in case of transparency
+ * Inherit color in case of transparency
  */
-static inline tui_color_t tui_window_color_inherit(tui_t* tui, tui_window_t* window, tui_color_t color)
+static inline tui_color_t tui_color_inherit(tui_t* tui, tui_window_t* window, tui_color_t color)
 {
   // If color has no transparency, it don't need to inherit
   if (color.fg != TUI_COLOR_NONE && color.bg != TUI_COLOR_NONE)
@@ -315,7 +319,11 @@ static inline tui_color_t tui_window_color_inherit(tui_t* tui, tui_window_t* win
   {
     inherit_color = window->_color;
   }
-  else if (tui)
+  else if (tui->menu)
+  {
+    inherit_color = tui->menu->_color;
+  }
+  else
   {
     inherit_color = tui->color;
   }
@@ -339,9 +347,19 @@ static inline tui_color_t tui_window_color_inherit(tui_t* tui, tui_window_t* win
  */
 static inline void tui_window_fill(tui_window_t* window)
 {
-  window->_color = tui_window_color_inherit(window->tui, (tui_window_t*) window->parent, window->color);
+  window->_color = tui_color_inherit(window->tui, (tui_window_t*) window->parent, window->color);
 
   wbkgd(window->window, COLOR_PAIR(tui_color_index_get(window->_color)));
+}
+
+/*
+ * Fill menu with color
+ */
+static inline void tui_menu_fill(tui_menu_t* menu)
+{
+  menu->_color = tui_color_inherit(menu->tui, NULL, menu->color);
+
+  bkgd(COLOR_PAIR(tui_color_index_get(menu->color)));
 }
 
 /*
@@ -364,7 +382,7 @@ void tui_border_draw(tui_window_parent_t* window)
 
   tui_window_t head = window->head;
 
-  tui_color_t color = tui_window_color_inherit(head.tui, (tui_window_t*) window, border.color);
+  tui_color_t color = tui_color_inherit(head.tui, (tui_window_t*) window, border.color);
 
   wattron(head.window, COLOR_PAIR(tui_color_index_get(color)));
 
@@ -491,6 +509,9 @@ static inline void tui_ncurses_window_free(WINDOW** window)
   *window = NULL;
 }
 
+/*
+ *
+ */
 typedef struct tui_config_t
 {
   tui_color_t color;
@@ -1614,10 +1635,19 @@ void tui_render(tui_t* tui)
   // 1. Resize every window to account for content
   tui_resize(tui);
 
+  tui_menu_t* menu = tui->menu;
+
   // 2. Fill tui background
   erase();
 
-  tui_fill(tui);
+  if (menu)
+  {
+    tui_menu_fill(menu);
+  }
+  else
+  {
+    tui_fill(tui);
+  }
 
   refresh();
   
@@ -1625,8 +1655,6 @@ void tui_render(tui_t* tui)
   tui_windows_render(tui->windows, tui->window_count);
 
   // 4. Render menu windows
-  tui_menu_t* menu = tui->menu;
-
   if (menu)
   {
     tui_windows_render(menu->windows, menu->window_count);
@@ -2242,6 +2270,72 @@ void tui_window_set(tui_t* tui, tui_window_t* window)
   {
     window->event.enter(window);
   }
+}
+
+/*
+ *
+ */
+void tui_menu_set(tui_t* tui, tui_menu_t* menu)
+{
+  if (tui->menu == menu) return;
+
+  if (tui->menu && tui->menu->event.exit)
+  {
+    tui->menu->event.exit(tui->menu);
+  }
+
+  tui->menu = menu;
+
+  if (menu && menu->event.enter)
+  {
+    menu->event.enter(menu);
+  }
+}
+
+/*
+ *
+ */
+typedef struct tui_menu_config_t
+{
+  char*            name;
+  tui_color_t      color;
+  tui_menu_event_t event;
+} tui_menu_config_t;
+
+/*
+ * Create menu and append it to tui
+ */
+tui_menu_t* tui_menu_create(tui_t* tui, tui_menu_config_t config)
+{
+  tui_menu_t* menu = malloc(sizeof(tui_menu_t));
+
+  if (!menu)
+  {
+    return NULL;
+  }
+
+  *menu = (tui_menu_t)
+  {
+    .name  = config.name,
+    .color = config.color,
+    .event = config.event,
+    .tui   = tui,
+  };
+
+  tui_menu_t** temp_menus = realloc(tui->menus, sizeof(tui_menu_t) * (tui->menu_count + 1));
+
+  if (!temp_menus)
+  {
+    free(menu);
+
+    return NULL;
+  }
+
+  tui->menus = temp_menus;
+
+  tui->menus[tui->menu_count++] = menu;
+
+  return menu;
 }
 
 #endif // TUI_IMPLEMENT

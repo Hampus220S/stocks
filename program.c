@@ -140,7 +140,16 @@ int main(int argc, char* argv[])
   info_print("Created TUI");
 
 
-  tui_window_parent_t* parent = tui_window_parent_create(tui, (tui_window_parent_config_t)
+  tui_menu_t* menu = tui_menu_create(tui, (tui_menu_config_t)
+  {
+    .name = "menu",
+    .color = (tui_color_t)
+    {
+      .bg = TUI_COLOR_GREEN
+    }
+  });
+
+  tui_window_parent_t* parent = tui_menu_window_parent_create(menu, (tui_window_parent_config_t)
   {
     .name = "parent",
     .rect = TUI_RECT_NONE,
@@ -368,6 +377,8 @@ int main(int argc, char* argv[])
       .align = TUI_POS_START
     });
   }
+
+  tui_menu_set(tui, menu);
 
   tui_window_set(tui, (tui_window_t*) footer);
 
