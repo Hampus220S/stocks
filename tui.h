@@ -44,14 +44,30 @@ typedef struct tui_menu_t tui_menu_t;
 typedef struct tui_window_t tui_window_t;
 
 /*
- * Definitions of event function signatures
+ * Window event struct
  */
+typedef struct tui_window_event_t
+{
+  bool (*key)  (tui_window_t* window, int key);
+  void (*enter)(tui_window_t* window);
+  void (*exit) (tui_window_t* window);
+} tui_window_event_t;
 
-typedef bool (*tui_window_event_t)(tui_window_t* window, int key);
+/*
+ * Menu event struct
+ */
+typedef struct tui_menu_event_t
+{
+  bool (*key)(tui_menu_t* menu, int key);
+} tui_menu_event_t;
 
-typedef bool (*tui_menu_event_t)(tui_menu_t* menu, int key);
-
-typedef bool (*tui_event_t)(tui_t* tui, int key);
+/*
+ * Tui event struct
+ */
+typedef struct tui_event_t
+{
+  bool (*key)(tui_t* tui, int key);
+} tui_event_t;
 
 /*
  * Size = width and height
@@ -624,9 +640,9 @@ bool tui_event(tui_t* tui, int key)
 
   while (window)
   {
-    if (window->event)
+    if (window->event.key)
     {
-      if (window->event(window, key))
+      if (window->event.key(window, key))
       {
         return true;
       }
@@ -639,18 +655,18 @@ bool tui_event(tui_t* tui, int key)
 
   if (menu)
   {
-    if (menu->event)
+    if (menu->event.key)
     {
-      if (menu->event(menu, key))
+      if (menu->event.key(menu, key))
       {
         return true;
       }
     }
   }
 
-  if (tui->event)
+  if (tui->event.key)
   {
-    if (tui->event(tui, key))
+    if (tui->event.key(tui, key))
     {
       return true;
     }
@@ -2252,6 +2268,32 @@ bool tui_list_event(tui_list_t* list, int key)
   }
 
   return false;
+}
+
+/*
+ *
+ */
+void tui_window_set(tui_t* tui, tui_window_t* window)
+{
+  if (tui->window == window) return;
+
+  if (tui->window)
+  {
+    if (tui->window->event.exit)
+    {
+      tui->window->event.exit(tui->window);
+    }
+  }
+
+  tui->window = window;
+
+  if (window)
+  {
+    if (window->event.enter)
+    {
+      window->event.enter(window);
+    }
+  }
 }
 
 #endif // TUI_IMPLEMENT

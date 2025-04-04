@@ -36,14 +36,57 @@ bool footer_event(tui_window_t* window, int key)
   {
     if (tui_list_event(list, key))
     {
-      tui_window_t* window = list->windows[list->index];
+      tui_window_t* child = list->windows[list->index];
 
-      window->color.bg = TUI_COLOR_BLUE;
+      tui_window_set(window->tui, child);
 
       return true;
     }
   }
 
+  return false;
+}
+
+void footer_enter_event(tui_window_t* window)
+{
+  tui_list_t* list = window->data;
+
+  if (list)
+  {
+    tui_window_t* child = list->windows[list->index];
+
+    tui_window_set(window->tui, child);
+  }
+}
+
+/*
+ *
+ */
+void footer_number_enter_event(tui_window_t* window)
+{
+  window->color.bg = TUI_COLOR_BLUE;
+}
+
+/*
+ *
+ */
+void footer_number_exit_event(tui_window_t* window)
+{
+  window->color.bg = TUI_COLOR_WHITE;
+}
+
+/*
+ *
+ */
+bool footer_number_key_event(tui_window_t* window, int key)
+{
+  if (key == KEY_ENTR)
+  {
+    window->color.bg = TUI_COLOR_RED;
+    
+    return true;
+  }
+  
   return false;
 }
 
@@ -145,7 +188,7 @@ int main(int argc, char* argv[])
     },
     .pos = TUI_POS_END,
     .align = TUI_ALIGN_CENTER,
-    .event = &input_window_event
+    .event.key = &input_window_event
   });
 
   // tui_input_t* input = tui_input_create(100, input_window);
@@ -175,7 +218,8 @@ int main(int argc, char* argv[])
     .has_padding = true,
     .pos = TUI_POS_CENTER,
     .align = TUI_ALIGN_BETWEEN,
-    .event = &footer_event
+    .event.key = &footer_event,
+    .event.enter = &footer_enter_event
   });
 
   char* numbers[] =
@@ -204,6 +248,9 @@ int main(int argc, char* argv[])
       },
       .align = TUI_POS_CENTER,
       .pos = TUI_POS_CENTER,
+      .event.enter = &footer_number_enter_event,
+      .event.exit = &footer_number_exit_event,
+      .event.key = &footer_number_key_event,
     });
   }
 
@@ -313,8 +360,7 @@ int main(int argc, char* argv[])
     });
   }
 
-
-  tui->window = (tui_window_t*) footer;
+  tui_window_set(tui, (tui_window_t*) footer);
 
   tui->is_running = true;
 
