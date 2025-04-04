@@ -2320,14 +2320,10 @@ bool tui_list_event(tui_list_t* list, int key)
     switch (key)
     {
       case KEY_DOWN:
-        tui_list_scroll_forward(list);
-
-        return true;
+        return tui_list_scroll_forward(list);
 
       case KEY_UP:
-        tui_list_scroll_back(list);
-
-        return true;
+        return tui_list_scroll_back(list);
 
       default:
         break;
@@ -2338,14 +2334,10 @@ bool tui_list_event(tui_list_t* list, int key)
     switch (key)
     {
       case KEY_RIGHT:
-        tui_list_scroll_forward(list);
-
-        return true;
+        return tui_list_scroll_forward(list);
 
       case KEY_LEFT:
-        tui_list_scroll_back(list);
-
-        return true;
+        return tui_list_scroll_back(list);
 
       default:
         break;
