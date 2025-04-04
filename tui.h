@@ -1411,7 +1411,7 @@ static inline void tui_align_rect_calc(tui_rect_t* rect, tui_window_parent_t* pa
       else if (parent->has_padding)
       {
         // Add this gap after current child
-        w_gap += 1;
+        w_gap += 2;
       }
     }
 
@@ -2032,9 +2032,15 @@ static inline bool tui_input_symbol_add(tui_input_t* input, char symbol)
     return false;
   }
 
-  // Shift characters forward to make room for new character
-  for (size_t index = input->buffer_len + 1; index-- > input->cursor;)
+  if (symbol < 32 || symbol > 126)
   {
+    return false;
+  }
+
+  // Shift characters forward to make room for new character
+  for (size_t index = input->buffer_len + 1; index-- > (input->cursor + 1);)
+  {
+    info_print("shifting...");
     input->buffer[index] = input->buffer[index - 1];
   }
 
@@ -2080,7 +2086,6 @@ static inline bool tui_input_symbol_del(tui_input_t* input)
   input->buffer_len--;
 
   input->buffer[input->buffer_len] = '\0';
-
 
   input->cursor = MIN(input->cursor - 1, input->buffer_len);
 
@@ -2165,7 +2170,7 @@ bool tui_input_event(tui_input_t* input, int key)
 /*
  * Create list struct
  */
-tui_list_t* tui_list_create(tui_window_t** windows, size_t count)
+tui_list_t* tui_list_create(bool is_vertical, tui_window_t** windows, size_t count)
 {
   tui_list_t* list = malloc(sizeof(tui_list_t));
 
@@ -2175,6 +2180,8 @@ tui_list_t* tui_list_create(tui_window_t** windows, size_t count)
   }
 
   memset(list, 0, sizeof(tui_list_t));
+
+  list->is_vertical = is_vertical;
 
   list->windows = windows;
   list->count   = count;
@@ -2233,12 +2240,12 @@ bool tui_list_event(tui_list_t* list, int key)
   {
     switch (key)
     {
-      case KEY_UP:
+      case KEY_DOWN:
         tui_list_scroll_forward(list);
 
         return true;
 
-      case KEY_DOWN:
+      case KEY_UP:
         tui_list_scroll_back(list);
 
         return true;
@@ -2310,7 +2317,8 @@ void tui_menu_set(tui_t* tui, tui_menu_t* menu)
 
   // If the active window is from another menu,
   // choose a window in menu to set active
-  if (tui->window->menu && tui->window->menu != menu)
+  if (!tui->window ||
+      (tui->window && tui->window->menu && tui->window->menu != menu))
   {
     for (size_t index = 0; index < menu->window_count; index++)
     {
@@ -2319,7 +2327,7 @@ void tui_menu_set(tui_t* tui, tui_menu_t* menu)
       // Change this to check if window is visable and interactive
       if (window)
       {
-        tui->window = window;
+        tui_window_set(tui, window);
 
         break;
       }
@@ -2376,6 +2384,40 @@ tui_menu_t* tui_menu_create(tui_t* tui, tui_menu_config_t config)
   tui->menus[tui->menu_count++] = menu;
 
   return menu;
+}
+
+/*
+ * Stop tui
+ */
+void tui_stop(tui_t* tui)
+{
+  tui->is_running = false;
+}
+
+/*
+ * Start tui
+ */
+void tui_start(tui_t* tui)
+{
+  tui->is_running = true;
+
+  tui_render(tui);
+
+  int key;
+
+  while (tui->is_running && (key = getch()))
+  {
+    if (key == KEY_CTRLC)
+    {
+      tui->is_running = false;
+
+      break;
+    }
+
+    tui_event(tui, key);
+
+    tui_render(tui);
+  }
 }
 
 #endif // TUI_IMPLEMENT
