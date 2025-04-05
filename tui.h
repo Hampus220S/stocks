@@ -146,7 +146,7 @@ typedef struct tui_window_t
 {
   bool                 is_text;
   char*                name;
-  bool                 is_visable;
+  bool                 is_hidden;
   tui_rect_t           rect;
   tui_rect_t           _rect;  // Temp calculated rect
   WINDOW*              window;
@@ -680,12 +680,9 @@ bool tui_event(tui_t* tui, int key)
 
   tui_menu_t* menu = tui->menu;
 
-  if (menu)
+  if (menu && menu->event.key && menu->event.key(menu, key))
   {
-    if (menu->event.key && menu->event.key(menu, key))
-    {
-      return true;
-    }
+    return true;
   }
 
   if (tui->event.key && tui->event.key(tui, key))
@@ -1721,7 +1718,7 @@ typedef struct tui_window_parent_config_t
   tui_window_event_t event;
   tui_rect_t         rect;
   tui_color_t        color;
-  bool               is_visable;
+  bool               is_hidden;
   tui_border_t       border;
   bool               has_padding;
   tui_pos_t          pos;
@@ -1747,13 +1744,13 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
 
   tui_window_t head = (tui_window_t)
   {
-    .is_text    = false,
-    .name       = config.name,
-    .rect       = config.rect,
-    .is_visable = config.is_visable,
-    .color      = config.color,
-    .event      = config.event,
-    .tui        = tui
+    .is_text   = false,
+    .name      = config.name,
+    .rect      = config.rect,
+    .is_hidden = config.is_hidden,
+    .color     = config.color,
+    .event     = config.event,
+    .tui       = tui
   };
 
   *window = (tui_window_parent_t)
@@ -1779,7 +1776,7 @@ typedef struct tui_window_text_config_t
   tui_window_event_t event;
   tui_rect_t         rect;
   tui_color_t        color;
-  bool               is_visable;
+  bool               is_hidden;
   char*              string;
   bool               is_secret;
   tui_pos_t          pos;
@@ -1803,13 +1800,13 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_
 
   tui_window_t head = (tui_window_t)
   {
-    .is_text    = true,
-    .name       = config.name,
-    .rect       = config.rect,
-    .is_visable = config.is_visable,
-    .color      = config.color,
-    .event      = config.event,
-    .tui        = tui
+    .is_text   = true,
+    .name      = config.name,
+    .rect      = config.rect,
+    .is_hidden = config.is_hidden,
+    .color     = config.color,
+    .event     = config.event,
+    .tui       = tui
   };
 
   *window = (tui_window_text_t)
@@ -2077,17 +2074,19 @@ void tui_input_delete(tui_input_t** input)
 /*
  * Add symbol to input buffer
  */
-static inline bool tui_input_symbol_add(tui_input_t* input, char symbol)
+static inline bool tui_input_symbol_add(tui_input_t* input, int key)
 {
   if (input->buffer_len >= input->buffer_size)
   {
     return false;
   }
 
-  if (symbol < 32 || symbol > 126)
+  if (key < 32 || key > 126)
   {
     return false;
   }
+
+  char symbol = key;
 
   // Shift characters forward to make room for new character
   for (size_t index = input->buffer_len + 1; index-- > (input->cursor + 1);)
@@ -2478,8 +2477,10 @@ void tui_start(tui_t* tui)
 
   int key;
 
-  while (tui->is_running && (key = getch()))
+  while (tui->is_running && (key = wgetch(stdscr)))
   {
+    // info_print("KEY: %d", key);
+
     if (key == KEY_CTRLC)
     {
       tui->is_running = false;
@@ -2491,6 +2492,252 @@ void tui_start(tui_t* tui)
 
     tui_render(tui);
   }
+}
+
+/*
+ * Get index of window in array of windows
+ */
+static ssize_t tui_window_index_get(tui_window_t** windows, size_t count, tui_window_t* window)
+{
+  for (size_t index = 0; index < count; index++)
+  {
+    if (windows[index] == window)
+    {
+      return index;
+    }
+  }
+  
+  return -1;
+}
+
+/*
+ *
+ */
+static bool tui_gg(tui_t* tui, tui_window_t** windows, size_t count)
+{
+  for (size_t index = 0; index < count; index++)
+  {
+    tui_window_t* window = windows[index];
+
+    if (!window->is_hidden) // && window->is_interactable
+    {
+      tui_window_set(tui, window);
+
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/*
+ * Tab window forwards
+ */
+bool tui_tab(tui_t* tui)
+{
+  tui_window_t* window = tui->window;
+
+  if (!window)
+  {
+    return false;
+  }
+
+  tui_window_parent_t* parent;
+
+  if (window->is_text)
+  {
+    parent = window->parent;
+  }
+  else
+  {
+    parent = (tui_window_parent_t*) window;
+
+    window = NULL;
+  }
+
+  while (parent)
+  {
+    size_t child_index = tui_window_index_get(parent->children, parent->child_count, window);
+
+    // info_print("child_index: %d", child_index);
+
+    if (child_index == -1)
+    {
+      error_print("tui_window_index_get");
+
+      return false;
+    }
+
+    child_index += 1;
+
+    if (tui_gg(tui, parent->children + child_index, parent->child_count - child_index))
+    {
+      return true;
+    }
+
+    window = (tui_window_t*) parent;
+
+    parent = parent->head.parent;
+  }
+
+  tui_menu_t* menu = tui->menu;
+
+  if (menu)
+  {
+    size_t window_index = tui_window_index_get(menu->windows, menu->window_count, window);
+
+    if (window_index == -1)
+    {
+      error_print("tui_window_index_get");
+
+      return false;
+    }
+
+    window_index += 1;
+
+    if (tui_gg(tui, menu->windows + window_index, menu->window_count - window_index))
+    {
+      return true;
+    }
+  }
+  else 
+  {
+    size_t window_index = tui_window_index_get(tui->windows, tui->window_count, window);
+
+    if (window_index == -1)
+    {
+      error_print("tui_window_index_get");
+
+      return false;
+    }
+
+    window_index += 1;
+
+    if (tui_gg(tui, tui->windows + window_index, tui->window_count - window_index))
+    {
+      return true;
+    }
+  }
+
+  if (tui_gg(tui, tui->windows, tui->window_count))
+  {
+    return true;
+  }
+
+  if (tui_gg(tui, menu->windows, menu->window_count))
+  {
+    return true;
+  }
+
+  return false;
+}
+
+/*
+ *
+ */
+static bool tui_hh(tui_t* tui, tui_window_t** windows, size_t count)
+{
+  for (size_t index = count; index-- > 0;)
+  {
+    tui_window_t* window = windows[index];
+
+    if (!window->is_hidden) // && window->is_interactable
+    {
+      tui_window_set(tui, window);
+
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/*
+ * Tab window backwards
+ */
+bool tui_btab(tui_t* tui)
+{
+  tui_window_t* window = tui->window;
+
+  if (!window)
+  {
+    return false;
+  }
+
+  tui_window_parent_t* parent = window->parent;
+
+  while (parent)
+  {
+    ssize_t child_index = tui_window_index_get(parent->children, parent->child_count, window);
+
+    info_print("btab %s child_index: %d", window->name, child_index);
+
+    if (child_index == -1)
+    {
+      error_print("tui_window_index_get");
+
+      return false;
+    }
+
+    if (tui_hh(tui, parent->children, child_index))
+    {
+      return true;
+    }
+
+    window = (tui_window_t*) parent;
+
+    parent = parent->head.parent;
+  }
+
+  tui_menu_t* menu = tui->menu;
+
+  if (menu)
+  {
+    ssize_t window_index = tui_window_index_get(menu->windows, menu->window_count, window);
+    
+    if (window_index == -1)
+    {
+      error_print("tui_window_index_get");
+
+      return false;
+    }
+
+    if (tui_hh(tui, menu->windows, window_index))
+    {
+      return true;
+    }
+  }
+  else 
+  {
+    ssize_t window_index = tui_window_index_get(tui->windows, tui->window_count, window);
+
+    if (window_index == -1)
+    {
+      error_print("tui_window_index_get");
+
+      return false;
+    }
+
+    if (tui_hh(tui, tui->windows, window_index))
+    {
+      return true;
+    }
+  }
+
+  // Small problem: now it's not garanteing that last child window is activated
+  // This means, when tabbing backwards, it is not looping correctly
+
+  if (tui_hh(tui, tui->windows, tui->window_count))
+  {
+    return true;
+  }
+
+  if (tui_hh(tui, menu->windows, menu->window_count))
+  {
+    return true;
+  }
+
+  return false;
 }
 
 #endif // TUI_IMPLEMENT

@@ -8,6 +8,23 @@
 #define DEBUG_IMPLEMENT
 #include "debug.h"
 
+bool tab_event(tui_t* tui, int key)
+{
+  switch (key)
+  {
+    case KEY_TAB:
+      return tui_tab(tui);
+
+    case 353:
+      return tui_btab(tui);
+
+    default:
+      break;
+  }
+
+  return false;
+}
+
 void root_window_enter(tui_window_t* head)
 {
   tui_window_parent_t* root = (tui_window_parent_t*) head;
@@ -100,13 +117,10 @@ bool side_window_key(tui_window_t* head, int key)
     return true;
   }
 
-  info_print("trying list");
-
   tui_list_t* list = data->list;
 
   if (tui_list_event(list, key))
   {
-    info_print("list event done");
     tui_window_t* child = list->items[list->item_index];
 
     tui_window_set(head->tui, child);
@@ -139,6 +153,7 @@ int main(int argc, char* argv[])
     {
       .fg = TUI_COLOR_BLACK,
     },
+    .event.key = &tab_event,
   });
 
   if (!tui)
@@ -199,6 +214,7 @@ int main(int argc, char* argv[])
     .event.exit = &side_window_exit,
     .event.key = &side_window_key,
     .is_inflated = false,
+    .has_padding = true,
   });
 
   tui_window_text_t* left_text = tui_parent_child_text_create(left, (tui_window_text_config_t)
