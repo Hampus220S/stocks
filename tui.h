@@ -342,6 +342,14 @@ static inline tui_color_t tui_color_inherit(tui_t* tui, tui_window_t* window, tu
 }
 
 /*
+ * Set color of window
+ */
+static inline void tui_window_color_set(tui_window_t* window, tui_color_t color)
+{
+  wattron(window->window, COLOR_PAIR(tui_color_index_get(color)));
+}
+
+/*
  * Fill window with color
  */
 static inline void tui_window_fill(tui_window_t* window)
@@ -857,27 +865,70 @@ static inline void tui_cursor_set(tui_t* tui, int x, int y)
 /*
  * Extract ANSI code from string and increment index
  */
-static inline char* tui_string_code_extract(char* string, size_t length, size_t* index)
+static inline char* tui_string_ansi_extract(char* string, size_t length, size_t* index)
 {
-  char* code = malloc(sizeof(char) * (length - *index + 1));
+  char* ansi = malloc(sizeof(char) * (length - *index + 1));
 
-  if (!code)
+  if (!ansi)
   {
     return NULL;
   }
 
-  size_t code_len = 0;
+  size_t ansi_len = 0;
 
-  (*index)++;
+  (*index) += 2;
 
   while (*index < length && string[*index] != 'm')
   {
-    code[code_len++] = string[(*index)++];
+    ansi[ansi_len++] = string[(*index)++];
   }
 
-  code[code_len] = '\0';
+  ansi[ansi_len] = '\0';
 
-  return code;
+  return ansi;
+}
+
+/*
+ * Handle ANSI escape code
+ *
+ * static tui_color_t color retains it's value between calls
+ */
+static inline void tui_string_ansi_handle(tui_window_t* window, char* ansi, int x, int y, int x_shift, int y_shift, tui_color_t* color)
+{
+  int code = atoi(ansi);
+
+  // Reset everything
+  if (code == 0)
+  {
+    *color = window->_color;
+
+    wattroff(window->window, A_ATTRIBUTES);
+
+    tui_window_color_set((tui_window_t*) window, window->_color);
+  }
+  // Cursor on
+  else if (code == 5)
+  {
+    // Only set the cursor if the text window is the active window
+    if (window->tui->window == (tui_window_t*) window)
+    {
+      tui_cursor_set(window->tui, window->_rect.x + x + x_shift, window->_rect.y + y + y_shift);
+    }
+  }
+  // Foreground color
+  else if (code >= 30 && code <= 37)
+  {
+    color->fg = code - 30;
+
+    tui_window_color_set((tui_window_t*) window, *color);
+  }
+  // Background color
+  else if (code >= 40 && code <= 47)
+  {
+    color->bg = code - 40;
+
+    tui_window_color_set((tui_window_t*) window, *color);
+  }
 }
 
 /*
@@ -901,6 +952,9 @@ static inline void tui_text_render(tui_window_text_t* window)
 
   tui_text_ws_get(ws, window->text, h);
 
+  // Store temporary color of letters
+  tui_color_t color = head._color;
+
   int x = 0;
   int y = 0;
 
@@ -918,20 +972,13 @@ static inline void tui_text_render(tui_window_text_t* window)
 
     if (letter == '\033')
     {
-      char* code = tui_string_code_extract(window->string, length, &index);
+      char* ansi = tui_string_ansi_extract(window->string, length, &index);
 
-      if (code)
+      if (ansi)
       {
-        if (strcmp(code, "[5") == 0)
-        {
-          // Only set the cursor if the text window is the active window
-          if (head.tui->window == (tui_window_t*) window)
-          {
-            tui_cursor_set(head.tui, head._rect.x + x + x_shift, head._rect.y + y + y_shift);
-          }
-        }
+        tui_string_ansi_handle((tui_window_t*) window, ansi, x, y, x_shift, y_shift, &color);
 
-        free(code);
+        free(ansi);
       }
     }
     else if (letter == ' ' && x == 0)

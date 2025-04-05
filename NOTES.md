@@ -2,4 +2,4 @@
 - fix flickering screen
 
 # Future
-- fix tui_tab and tui_btab
+- fix tui_tab_forward and tui_tab_backward

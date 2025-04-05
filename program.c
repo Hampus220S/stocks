@@ -232,7 +232,7 @@ int main(int argc, char* argv[])
   char* left_strings[] =
   {
     "banana",
-    "ballong",
+    "ba\033[42ml\33[33mlon\033[0mg",
     "seven",
     "segel"
   };
