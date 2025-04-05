@@ -13,10 +13,10 @@ bool tab_event(tui_t* tui, int key)
   switch (key)
   {
     case KEY_TAB:
-      return tui_tab(tui);
+      return tui_tab_forward(tui);
 
-    case 353:
-      return tui_btab(tui);
+    case KEY_RTAB:
+      return tui_tab_backward(tui);
 
     default:
       break;
@@ -184,6 +184,7 @@ int main(int argc, char* argv[])
     .align = TUI_ALIGN_CENTER,
     .pos = TUI_POS_CENTER,
     .event.enter = &root_window_enter,
+    .is_inflated = true,
   });
 
   tui_window_parent_t* panel = tui_parent_child_parent_create(root, (tui_window_parent_config_t)
@@ -200,6 +201,7 @@ int main(int argc, char* argv[])
     .has_padding = true,
     .event.key = &panel_window_key,
     .event.enter = &panel_window_enter,
+    .is_inflated = true,
   });
 
   tui_window_parent_t* left = tui_parent_child_parent_create(panel, (tui_window_parent_config_t)
@@ -215,6 +217,8 @@ int main(int argc, char* argv[])
     .event.key = &side_window_key,
     .is_inflated = false,
     .has_padding = true,
+    .pos = TUI_POS_CENTER,
+    .align = TUI_ALIGN_CENTER,
   });
 
   tui_window_text_t* left_text = tui_parent_child_text_create(left, (tui_window_text_config_t)
@@ -272,6 +276,8 @@ int main(int argc, char* argv[])
     .event.exit = &side_window_exit,
     .event.key = &side_window_key,
     .is_inflated = false,
+    .pos = TUI_POS_CENTER,
+    .align = TUI_ALIGN_CENTER,
   });
 
   tui_window_text_t* right_text = tui_parent_child_text_create(right, (tui_window_text_config_t)

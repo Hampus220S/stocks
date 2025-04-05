@@ -3,7 +3,7 @@
  *
  * Written by Hampus Fridholm
  *
- * Last updated: 2025-04-04
+ * Last updated: 2025-04-05
  *
  * This library depends on debug.h
  */
@@ -30,6 +30,7 @@
 #define KEY_CTRLD  4
 #define KEY_ENTR  10
 #define KEY_TAB    9
+#define KEY_RTAB 353
 
 #define TUI_PARENT_SIZE 0
 
@@ -72,7 +73,7 @@ typedef struct tui_event_t
 } tui_event_t;
 
 /*
- * Size = width and height
+ * Size struct: width and height
  */
 typedef struct tui_size_t
 {
@@ -83,7 +84,7 @@ typedef struct tui_size_t
 const tui_size_t TUI_SIZE_NONE = { 0 };
 
 /*
- * Normal rect
+ * Rect struct
  */
 typedef struct tui_rect_t
 {
@@ -123,7 +124,7 @@ enum {
 };
 
 /*
- * Border
+ * Border struct
  */
 typedef struct tui_border_t
 {
@@ -156,15 +157,11 @@ typedef struct tui_window_t
   tui_window_parent_t* parent;
   tui_menu_t*          menu;
   tui_t*               tui;
-  void*                data; // User attached data
+  void*                data;   // User attached data
 } tui_window_t;
 
 /*
  * Input data struct, that can be attached to window
- *
- * If text window is NULL:
- * - the input is not visable
- * - arrow keys don't work
  */
 typedef struct tui_input_t
 {
@@ -257,7 +254,7 @@ typedef struct tui_menu_t
 } tui_menu_t;
 
 /*
- * Tui cursor
+ * Cursor struct
  */
 typedef struct tui_cursor_t
 {
@@ -524,7 +521,7 @@ static inline void tui_ncurses_window_free(WINDOW** window)
 }
 
 /*
- *
+ * Configuration struct for creating tui
  */
 typedef struct tui_config_t
 {
@@ -635,7 +632,7 @@ static inline void tui_menu_free(tui_menu_t** menu)
 }
 
 /*
- * Delete tui struct
+ * Delete (free) tui struct
  */
 void tui_delete(tui_t** tui)
 {
@@ -736,7 +733,6 @@ static inline int tui_text_h_get(char* text, int w)
       // Current word cannot be wrapped
       if (space_index == last_space_index)
       {
-        // info_print("Cannot be wrapped: w: %d\n", w);
         return -1;
       }
 
@@ -865,6 +861,11 @@ static inline char* tui_string_code_extract(char* string, size_t length, size_t*
 {
   char* code = malloc(sizeof(char) * (length - *index + 1));
 
+  if (!code)
+  {
+    return NULL;
+  }
+
   size_t code_len = 0;
 
   (*index)++;
@@ -881,8 +882,6 @@ static inline char* tui_string_code_extract(char* string, size_t length, size_t*
 
 /*
  * Render text in rect in window
- *
- * xpos determines if the text is aligned to the left, centered or right
  */
 static inline void tui_text_render(tui_window_text_t* window)
 {
@@ -921,16 +920,19 @@ static inline void tui_text_render(tui_window_text_t* window)
     {
       char* code = tui_string_code_extract(window->string, length, &index);
 
-      if (strcmp(code, "[5") == 0)
+      if (code)
       {
-        // Only set the cursor if the text window is the active window
-        if (head.tui->window == (tui_window_t*) window)
+        if (strcmp(code, "[5") == 0)
         {
-          tui_cursor_set(head.tui, head._rect.x + x + x_shift, head._rect.y + y + y_shift);
+          // Only set the cursor if the text window is the active window
+          if (head.tui->window == (tui_window_t*) window)
+          {
+            tui_cursor_set(head.tui, head._rect.x + x + x_shift, head._rect.y + y + y_shift);
+          }
         }
-      }
 
-      free(code);
+        free(code);
+      }
     }
     else if (letter == ' ' && x == 0)
     {
@@ -966,11 +968,19 @@ static inline void tui_text_render(tui_window_text_t* window)
  */
 static inline char* tui_text_extract(char* string)
 {
-  if (!string) return NULL;
+  if (!string)
+  {
+    return NULL;
+  }
 
   size_t length = strlen(string);
 
   char* text = malloc(sizeof(char) * (length + 1));
+
+  if (!text)
+  {
+    return NULL;
+  }
 
   size_t text_len = 0;
 
@@ -1043,13 +1053,6 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
  */
 static inline void tui_window_render(tui_window_t* window)
 {
-  // Unable to render if _rect is not calculated
-  if (window->_rect.is_none)
-  {
-    info_print("tui_window_render: _rect not calculated");
-    return;
-  }
-
   if (window->is_text)
   {
     tui_window_text_render((tui_window_text_t*) window);
@@ -1086,6 +1089,13 @@ static inline void tui_window_text_size_calc(tui_window_text_t* window)
   free(window->text);
 
   window->text = tui_text_extract(window->string);
+
+  if (!window->text)
+  {
+    window->head._rect = TUI_RECT_NONE;
+
+    return;
+  }
 
   if (!window->head.rect.is_none)
   {
@@ -1228,9 +1238,9 @@ static inline void tui_windows_size_calc(tui_window_t** windows, size_t count)
 }
 
 /*
- *
+ * Get starting y of aligned parent children
  */
-static inline int tui_align_y_get(tui_window_parent_t* parent)
+static inline int tui_child_y_get(tui_window_parent_t* parent)
 {
   int y = 0;
 
@@ -1248,9 +1258,9 @@ static inline int tui_align_y_get(tui_window_parent_t* parent)
 }
 
 /*
- *
+ * Get starting x of aligned parent children
  */
-static inline int tui_align_x_get(tui_window_parent_t* parent)
+static inline int tui_child_x_get(tui_window_parent_t* parent)
 {
   int x = 0;
 
@@ -1268,190 +1278,208 @@ static inline int tui_align_x_get(tui_window_parent_t* parent)
 }
 
 /*
- * Calculate rect of aligned child
+ * Calculate rect of vertically aligned child
+ *
+ * Maybe: Remove rect argument and use child->_rect instead
  */
-static inline void tui_align_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, size_t align_count, size_t align_index)
+static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, size_t align_count, size_t align_index)
 {
-  if (parent->is_vertical)
+  if (align_index == 0)
   {
-    if (align_index == 0)
+    rect->y = tui_child_y_get(parent);
+  }
+
+  rect->x = tui_child_x_get(parent);
+
+  int h_space = (max_size.h - align_size.h);
+
+  int h = child->_rect.h;
+
+  int h_gap = 0;
+
+  if (parent->is_inflated)
+  {
+    if (parent->has_padding)
     {
-      rect->y = tui_align_y_get(parent);
+      // Add this gap after current child
+      h_gap += 1;
+      
+      h_space = MAX(0, h_space - align_count + 1); 
     }
 
-    rect->x = tui_align_x_get(parent);
+    int gap = h_space / align_count;
 
-    int h_space = (max_size.h - align_size.h);
+    h += gap;
 
-    int h = child->_rect.h;
-
-    int h_gap = 0;
-
-    if (parent->is_inflated)
+    if (h_space - gap * align_count > align_index)
     {
+      h += 1;
+    }
+  }
+  else if (parent->align == TUI_ALIGN_BETWEEN)
+  {
+    // Add this gap after current child
+    int gap = (float) h_space / (float) (align_count - 1);
+
+    h_gap += gap;
+
+    if (h_space - gap * (align_count - 1) > align_index)
+    {
+      h_gap += 1;
+    }
+  }
+  else if (parent->align == TUI_ALIGN_AROUND)
+  {
+    // Add this gap before current child
+    int gap = (float) h_space / (float) (align_count + 1);
+
+    int rest = h_space - gap * (align_count + 1);
+
+    if (align_index == 0 && rest > 0)
+    {
+      rect->y += (float) rest / 2.f;
+    }
+
+    rect->y += gap;
+  }
+  else if (parent->align < 3) // START, CENTER, END
+  {
+    if (align_index == 0) // First child to align
+    {
+      // Add this gap before current child
       if (parent->has_padding)
       {
-        // Add this gap after current child
-        h_gap += 1;
-        
         h_space = MAX(0, h_space - align_count + 1); 
       }
 
-      int gap = h_space / align_count;
-
-      h += gap;
-
-      if (h_space - gap * align_count > align_index)
-      {
-        h += 1;
-      }
+      rect->y += (float) parent->align / 2.f * h_space;
     }
-    else if (parent->align == TUI_ALIGN_BETWEEN)
+    else if (parent->has_padding)
     {
       // Add this gap after current child
-      int gap = (float) h_space / (float) (align_count - 1);
-
-      h_gap += gap;
-
-      if (h_space - gap * (align_count - 1) > align_index)
-      {
-        h_gap += 1;
-      }
+      h_gap += 1;
     }
-    else if (parent->align == TUI_ALIGN_AROUND)
+  }
+
+  if (align_index > 0)
+  {
+    rect->y += last_child->_rect.h + h_gap;
+  }
+
+  int w = parent->is_inflated ? max_size.w : child->_rect.w;
+
+  rect->w = w;
+  rect->h = h;
+
+  rect->x += (float) parent->pos / 2.f * (max_size.w - w);
+}
+
+/*
+ * Calculate rect of horizontally aligned child
+ */
+static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, size_t align_count, size_t align_index)
+{
+  if (align_index == 0)
+  {
+    rect->x = tui_child_x_get(parent);
+  }
+
+  rect->y = tui_child_y_get(parent);
+
+  int w_space = (max_size.w - align_size.w);
+
+  int w = child->_rect.w;
+
+  int w_gap = 0;
+
+  if (parent->is_inflated)
+  {
+    if (parent->has_padding)
+    {
+      // Add this gap after current child
+      w_gap += 1;
+      
+      w_space = MAX(0, w_space - align_count + 1); 
+    }
+
+    int gap = w_space / align_count;
+
+    w += gap;
+
+    if (w_space - gap * align_count > align_index)
+    {
+      w += 1;
+    }
+  }
+  else if (parent->align == TUI_ALIGN_BETWEEN)
+  {
+    // Add this gap after current child
+    int gap = (float) w_space / (float) (align_count - 1);
+
+    w_gap += gap;
+
+    if (w_space - gap * (align_count - 1) > align_index)
+    {
+      w_gap += 1;
+    }
+  }
+  else if (parent->align == TUI_ALIGN_AROUND)
+  {
+    int gap = (float) w_space / (float) (align_count + 1);
+
+    int rest = w_space - gap * (align_count + 1);
+
+    if (align_index == 0 && rest > 0)
+    {
+      rect->x += (float) rest / 2.f;
+    }
+
+    rect->x += gap;
+  }
+  else if (parent->align < 3) // START, CENTER, END
+  {
+    if (align_index == 0) // First child to align
     {
       // Add this gap before current child
-      int gap = (float) h_space / (float) (align_count + 1);
-
-      int rest = h_space - gap * (align_count + 1);
-
-      if (align_index == 0 && rest > 0)
-      {
-        rect->y += (float) rest / 2.f;
-      }
-
-      rect->y += gap;
-    }
-    else if (parent->align < 3) // START, CENTER, END
-    {
-      if (align_index == 0) // First child to align
-      {
-        // Add this gap before current child
-        if (parent->has_padding)
-        {
-          h_space = MAX(0, h_space - align_count + 1); 
-        }
-
-        rect->y += (float) parent->align / 2.f * h_space;
-      }
-      else if (parent->has_padding)
-      {
-        // Add this gap after current child
-        h_gap += 1;
-      }
-    }
-
-    if (align_index > 0)
-    {
-      rect->y += last_child->_rect.h + h_gap;
-    }
-
-    int w = parent->is_inflated ? max_size.w : child->_rect.w;
-
-    rect->w = w;
-    rect->h = h;
-
-    rect->x += (float) parent->pos / 2.f * (max_size.w - w);
-  }
-  else
-  {
-    if (align_index == 0)
-    {
-      rect->x = tui_align_x_get(parent);
-    }
-
-    rect->y = tui_align_y_get(parent);
-
-    int w_space = (max_size.w - align_size.w);
-
-    int w = child->_rect.w;
-
-    int w_gap = 0;
-
-    if (parent->is_inflated)
-    {
       if (parent->has_padding)
       {
-        // Add this gap after current child
-        w_gap += 1;
-        
         w_space = MAX(0, w_space - align_count + 1); 
       }
 
-      int gap = w_space / align_count;
-
-      w += gap;
-
-      if (w_space - gap * align_count > align_index)
-      {
-        w += 1;
-      }
+      rect->x += (float) parent->align / 2.f * w_space;
     }
-    else if (parent->align == TUI_ALIGN_BETWEEN)
+    else if (parent->has_padding)
     {
       // Add this gap after current child
-      int gap = (float) w_space / (float) (align_count - 1);
-
-      w_gap += gap;
-
-      if (w_space - gap * (align_count - 1) > align_index)
-      {
-        w_gap += 1;
-      }
+      w_gap += 2;
     }
-    else if (parent->align == TUI_ALIGN_AROUND)
-    {
-      int gap = (float) w_space / (float) (align_count + 1);
+  }
 
-      int rest = w_space - gap * (align_count + 1);
+  if (align_index > 0)
+  {
+    rect->x += last_child->_rect.w + w_gap;
+  }
 
-      if (align_index == 0 && rest > 0)
-      {
-        rect->x += (float) rest / 2.f;
-      }
+  int h = parent->is_inflated ? max_size.h : child->_rect.h;
 
-      rect->x += gap;
-    }
-    else if (parent->align < 3) // START, CENTER, END
-    {
-      if (align_index == 0) // First child to align
-      {
-        // Add this gap before current child
-        if (parent->has_padding)
-        {
-          w_space = MAX(0, w_space - align_count + 1); 
-        }
+  rect->w = w;
+  rect->h = h;
 
-        rect->x += (float) parent->align / 2.f * w_space;
-      }
-      else if (parent->has_padding)
-      {
-        // Add this gap after current child
-        w_gap += 2;
-      }
-    }
+  rect->y += (float) parent->pos / 2.f * (max_size.h - h);
+}
 
-    if (align_index > 0)
-    {
-      rect->x += last_child->_rect.w + w_gap;
-    }
-
-    int h = parent->is_inflated ? max_size.h : child->_rect.h;
-
-    rect->w = w;
-    rect->h = h;
-
-    rect->y += (float) parent->pos / 2.f * (max_size.h - h);
+/*
+ * Calculate rect of aligned child
+ */
+static inline void tui_child_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, size_t align_count, size_t align_index)
+{
+  if (parent->is_vertical)
+  {
+    tui_child_vert_rect_calc(rect, parent, child, last_child, max_size, align_size, align_count, align_index);
+  }
+  else
+  {
+    tui_child_horiz_rect_calc(rect, parent, child, last_child, max_size, align_size, align_count, align_index);
   }
 }
 
@@ -1484,7 +1512,7 @@ static inline tui_rect_t tui_window_rect_get(tui_rect_t rect, int parent_w, int 
 }
 
 /*
- * Calculate rect of parent children
+ * Calculate rect of parent's children
  *
  * Make use of the temporarily stored sizes in _rect
  */
@@ -1534,6 +1562,7 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
   // Limit size to parent's size
   align_size.w = MIN(align_size.w, max_size.w);
+
   align_size.h = MIN(align_size.h, max_size.h);
 
   tui_rect_t rect = { 0 };
@@ -1548,7 +1577,7 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
     if (child->rect.is_none)
     {
-      tui_align_rect_calc(&rect, parent, child, last_child, max_size, align_size, align_count, align_index);
+      tui_child_rect_calc(&rect, parent, child, last_child, max_size, align_size, align_count, align_index);
 
       child->_rect = rect;
 
@@ -1565,8 +1594,8 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
     // Move child window into parent window
     child->_rect.x += parent->head._rect.x;
-    child->_rect.y += parent->head._rect.y;
 
+    child->_rect.y += parent->head._rect.y;
 
     child->window = tui_ncurses_window_update(child->window, child->_rect);
 
@@ -1578,29 +1607,31 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 }
 
 /*
+ * Calculate rect of window
+ */
+static inline void tui_window_rect_calc(tui_window_t* window, int w, int h)
+{
+  if (!window->rect.is_none)
+  {
+    window->_rect = tui_window_rect_get(window->rect, w, h);
+  }
+
+  window->window = tui_ncurses_window_update(window->window, window->_rect);
+
+  if(!window->is_text)
+  {
+    tui_children_rect_calc((tui_window_parent_t*) window);
+  }
+}
+
+/*
  * Calculate rects of windows
  */
 static inline void tui_windows_rect_calc(tui_window_t** windows, size_t count, int w, int h)
 {
   for (size_t index = 0; index < count; index++)
   {
-    tui_window_t* window = windows[index];
-
-    if (window->rect.is_none)
-    {
-      window->_rect = window->_rect;
-    }
-    else
-    {
-      window->_rect = tui_window_rect_get(window->rect, w, h);
-    }
-
-    window->window = tui_ncurses_window_update(window->window, window->_rect);
-
-    if(!window->is_text)
-    {
-      tui_children_rect_calc((tui_window_parent_t*) window);
-    }
+    tui_window_rect_calc(windows[index], w, h);
   }
 }
 
@@ -1661,13 +1692,11 @@ void tui_render(tui_t* tui)
 
   curs_set(0);
 
-  // 1. Resize every window to account for content
   tui_resize(tui);
 
-  tui_menu_t* menu = tui->menu;
-
-  // 2. Fill tui background
   erase();
+
+  tui_menu_t* menu = tui->menu;
 
   if (menu)
   {
@@ -1985,7 +2014,9 @@ tui_window_text_t* tui_parent_child_text_create(tui_window_parent_t* parent, tui
 }
 
 /*
+ * Update visable string from input buffer
  *
+ * The buffer can for example be partially visable
  */
 static inline void tui_input_string_update(tui_input_t* input)
 {
@@ -2026,6 +2057,11 @@ tui_input_t* tui_input_create(tui_t* tui, size_t size, tui_window_text_t* window
 {
   tui_input_t* input = malloc(sizeof(tui_input_t));
 
+  if (!input)
+  {
+    return NULL;
+  }
+
   memset(input, 0, sizeof(tui_input_t));
 
   *input = (tui_input_t)
@@ -2037,10 +2073,26 @@ tui_input_t* tui_input_create(tui_t* tui, size_t size, tui_window_text_t* window
 
   input->buffer = malloc(sizeof(char) * (size + 1));
 
+  if (!input->buffer)
+  {
+    free(input);
+
+    return NULL;
+  }
+
   memset(input->buffer, '\0', sizeof(char) * (size + 1));
 
 
   input->string = malloc(sizeof(char) * (size + 6));
+
+  if (!input->string)
+  {
+    free(input->buffer);
+
+    free(input);
+
+    return NULL;
+  }
 
   tui_input_string_update(input);
 
@@ -2091,7 +2143,6 @@ static inline bool tui_input_symbol_add(tui_input_t* input, int key)
   // Shift characters forward to make room for new character
   for (size_t index = input->buffer_len + 1; index-- > (input->cursor + 1);)
   {
-    info_print("shifting...");
     input->buffer[index] = input->buffer[index - 1];
   }
 
@@ -2201,7 +2252,7 @@ static inline bool tui_input_scroll_left(tui_input_t* input)
 }
 
 /*
- *
+ * Handle keypress in input window
  */
 bool tui_input_event(tui_input_t* input, int key)
 {
@@ -2280,7 +2331,7 @@ void tui_list_delete(tui_list_t** list)
 }
 
 /*
- *
+ * Scroll forward to next selected item
  */
 static inline bool tui_list_scroll_forward(tui_list_t* list)
 {
@@ -2295,9 +2346,9 @@ static inline bool tui_list_scroll_forward(tui_list_t* list)
 }
 
 /*
- *
+ * Scroll backwards to next selected item
  */
-static inline bool tui_list_scroll_back(tui_list_t* list)
+static inline bool tui_list_scroll_backward(tui_list_t* list)
 {
   if (list->item_index <= 0)
   {
@@ -2322,7 +2373,7 @@ bool tui_list_event(tui_list_t* list, int key)
         return tui_list_scroll_forward(list);
 
       case KEY_UP:
-        return tui_list_scroll_back(list);
+        return tui_list_scroll_backward(list);
 
       default:
         break;
@@ -2336,7 +2387,7 @@ bool tui_list_event(tui_list_t* list, int key)
         return tui_list_scroll_forward(list);
 
       case KEY_LEFT:
-        return tui_list_scroll_back(list);
+        return tui_list_scroll_backward(list);
 
       default:
         break;
@@ -2348,6 +2399,10 @@ bool tui_list_event(tui_list_t* list, int key)
 
 /*
  * Set window to active window
+ *
+ * Call enter event for new window and exit event for old window
+ *
+ * Set window's menu to active menu
  */
 void tui_window_set(tui_t* tui, tui_window_t* window)
 {
@@ -2375,6 +2430,10 @@ void tui_window_set(tui_t* tui, tui_window_t* window)
 
 /*
  * Set menu to active menu
+ *
+ * Call enter event for new menu and exit event for old menu
+ *
+ * Set window to active window if needed
  */
 void tui_menu_set(tui_t* tui, tui_menu_t* menu)
 {
@@ -2413,7 +2472,7 @@ void tui_menu_set(tui_t* tui, tui_menu_t* menu)
 }
 
 /*
- *
+ * Configuration struct for menu
  */
 typedef struct tui_menu_config_t
 {
@@ -2467,7 +2526,7 @@ void tui_stop(tui_t* tui)
 }
 
 /*
- * Start tui
+ * Start tui - main loop
  */
 void tui_start(tui_t* tui)
 {
@@ -2511,9 +2570,9 @@ static ssize_t tui_window_index_get(tui_window_t** windows, size_t count, tui_wi
 }
 
 /*
- *
+ * Search through array of windows and activate first interactable window
  */
-static bool tui_gg(tui_t* tui, tui_window_t** windows, size_t count)
+static bool tui_windows_tab_forward(tui_t* tui, tui_window_t** windows, size_t count)
 {
   for (size_t index = 0; index < count; index++)
   {
@@ -2533,7 +2592,7 @@ static bool tui_gg(tui_t* tui, tui_window_t** windows, size_t count)
 /*
  * Tab window forwards
  */
-bool tui_tab(tui_t* tui)
+bool tui_tab_forward(tui_t* tui)
 {
   tui_window_t* window = tui->window;
 
@@ -2559,8 +2618,6 @@ bool tui_tab(tui_t* tui)
   {
     size_t child_index = tui_window_index_get(parent->children, parent->child_count, window);
 
-    // info_print("child_index: %d", child_index);
-
     if (child_index == -1)
     {
       error_print("tui_window_index_get");
@@ -2570,7 +2627,7 @@ bool tui_tab(tui_t* tui)
 
     child_index += 1;
 
-    if (tui_gg(tui, parent->children + child_index, parent->child_count - child_index))
+    if (tui_windows_tab_forward(tui, parent->children + child_index, parent->child_count - child_index))
     {
       return true;
     }
@@ -2595,7 +2652,7 @@ bool tui_tab(tui_t* tui)
 
     window_index += 1;
 
-    if (tui_gg(tui, menu->windows + window_index, menu->window_count - window_index))
+    if (tui_windows_tab_forward(tui, menu->windows + window_index, menu->window_count - window_index))
     {
       return true;
     }
@@ -2613,18 +2670,18 @@ bool tui_tab(tui_t* tui)
 
     window_index += 1;
 
-    if (tui_gg(tui, tui->windows + window_index, tui->window_count - window_index))
+    if (tui_windows_tab_forward(tui, tui->windows + window_index, tui->window_count - window_index))
     {
       return true;
     }
   }
 
-  if (tui_gg(tui, tui->windows, tui->window_count))
+  if (tui_windows_tab_forward(tui, tui->windows, tui->window_count))
   {
     return true;
   }
 
-  if (tui_gg(tui, menu->windows, menu->window_count))
+  if (tui_windows_tab_forward(tui, menu->windows, menu->window_count))
   {
     return true;
   }
@@ -2633,9 +2690,9 @@ bool tui_tab(tui_t* tui)
 }
 
 /*
- *
+ * Search through array of windows backwards and activate first interactable window
  */
-static bool tui_hh(tui_t* tui, tui_window_t** windows, size_t count)
+static bool tui_windows_tab_backward(tui_t* tui, tui_window_t** windows, size_t count)
 {
   for (size_t index = count; index-- > 0;)
   {
@@ -2655,7 +2712,7 @@ static bool tui_hh(tui_t* tui, tui_window_t** windows, size_t count)
 /*
  * Tab window backwards
  */
-bool tui_btab(tui_t* tui)
+bool tui_tab_backward(tui_t* tui)
 {
   tui_window_t* window = tui->window;
 
@@ -2670,8 +2727,6 @@ bool tui_btab(tui_t* tui)
   {
     ssize_t child_index = tui_window_index_get(parent->children, parent->child_count, window);
 
-    info_print("btab %s child_index: %d", window->name, child_index);
-
     if (child_index == -1)
     {
       error_print("tui_window_index_get");
@@ -2679,7 +2734,7 @@ bool tui_btab(tui_t* tui)
       return false;
     }
 
-    if (tui_hh(tui, parent->children, child_index))
+    if (tui_windows_tab_backward(tui, parent->children, child_index))
     {
       return true;
     }
@@ -2702,7 +2757,7 @@ bool tui_btab(tui_t* tui)
       return false;
     }
 
-    if (tui_hh(tui, menu->windows, window_index))
+    if (tui_windows_tab_backward(tui, menu->windows, window_index))
     {
       return true;
     }
@@ -2718,7 +2773,7 @@ bool tui_btab(tui_t* tui)
       return false;
     }
 
-    if (tui_hh(tui, tui->windows, window_index))
+    if (tui_windows_tab_backward(tui, tui->windows, window_index))
     {
       return true;
     }
@@ -2727,12 +2782,12 @@ bool tui_btab(tui_t* tui)
   // Small problem: now it's not garanteing that last child window is activated
   // This means, when tabbing backwards, it is not looping correctly
 
-  if (tui_hh(tui, tui->windows, tui->window_count))
+  if (tui_windows_tab_backward(tui, tui->windows, tui->window_count))
   {
     return true;
   }
 
-  if (tui_hh(tui, menu->windows, menu->window_count))
+  if (tui_windows_tab_backward(tui, menu->windows, menu->window_count))
   {
     return true;
   }
