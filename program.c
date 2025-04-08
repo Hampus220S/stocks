@@ -8,6 +8,9 @@
 #define DEBUG_IMPLEMENT
 #include "debug.h"
 
+#define STOCK_IMPLEMENT
+#include "stock.h"
+
 bool tab_event(tui_t* tui, int key)
 {
   switch (key)
@@ -124,6 +127,8 @@ bool side_window_key(tui_window_t* head, int key)
     tui_window_t* child = list->items[list->item_index];
 
     tui_window_set(head->tui, child);
+
+    return true;
   }
 
   return false;
@@ -134,6 +139,30 @@ bool side_window_key(tui_window_t* head, int key)
  */
 int main(int argc, char* argv[])
 {
+  stock_t* stock = stock_get("TSLA", "1d");
+
+  if (stock)
+  {
+    printf("Name     : %s\n", stock->name);
+    printf("Currency : %s\n", stock->currency);
+    printf("Symbol   : %s\n", stock->symbol);
+    printf("Range    : %s\n", stock->range);
+
+    for (size_t index = 0; index < stock->value_count; index++)
+    {
+      stock_value_t value = stock->values[index];
+
+      printf("Time: %d\n", value.time);
+      printf("  Open  : %.2f\n", value.open);
+      printf("  Close : %.2f\n", value.close);
+      printf("  High  : %.2f\n", value.high);
+      printf("  Low   : %.2f\n", value.low);
+    }
+
+    stock_free(&stock);
+  }
+
+  /*
   debug_file_open("debug.log");
 
   if(tui_init() != 0)
@@ -201,7 +230,7 @@ int main(int argc, char* argv[])
     .has_padding = true,
     .event.key = &panel_window_key,
     .event.enter = &panel_window_enter,
-    .align = TUI_ALIGN_END,
+    .align = TUI_ALIGN_BETWEEN,
     .pos = TUI_POS_END,
     .is_inflated = false,
     .is_vertical = false,
@@ -250,7 +279,7 @@ int main(int argc, char* argv[])
   {
     "banana",
     "ba\033[42ml\33[33mlon\033[0mg",
-    "seven",
+    "|\n\033[42m\033[32m|\033[0m\n|",
     "segel"
   };
 
@@ -415,6 +444,7 @@ int main(int argc, char* argv[])
   info_print("Quitted TUI");
 
   debug_file_close();
+  */
 
   return 0;
 }
