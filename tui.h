@@ -140,12 +140,24 @@ typedef struct tui_window_parent_t tui_window_parent_t;
 
 typedef struct tui_window_text_t   tui_window_text_t;
 
+typedef struct tui_window_grid_t   tui_window_grid_t;
+
+/*
+ *
+ */
+typedef enum tui_window_type_t
+{
+  TUI_WINDOW_PARENT,
+  TUI_WINDOW_TEXT,
+  TUI_WINDOW_GRID,
+} tui_window_type_t;
+
 /*
  * Window struct
  */
 typedef struct tui_window_t
 {
-  bool                 is_text;
+  tui_window_type_t    type;
   char*                name;
   bool                 is_hidden;
   tui_rect_t           rect;
@@ -209,6 +221,25 @@ typedef enum tui_align_t
   TUI_ALIGN_AROUND,
   TUI_ALIGN_EVENLY
 } tui_align_t;
+
+/*
+ * Grid window square struct
+ */
+typedef struct tui_window_grid_square_t
+{
+  tui_color_t color;
+  char        symbol;
+} tui_window_grid_square_t;
+
+/*
+ * Grid window struct
+ */
+typedef struct tui_window_grid_t
+{
+  tui_window_t              head;
+  tui_size_t                size;
+  tui_window_grid_square_t* grid;
+} tui_window_grid_t;
 
 /*
  * Text window struct
@@ -593,19 +624,42 @@ static inline void tui_window_text_free(tui_window_text_t** window)
 }
 
 /*
+ * Free grid window struct
+ */
+static inline void tui_window_grid_free(tui_window_grid_t** window)
+{
+  tui_ncurses_window_free(&(*window)->head.window);
+
+  free((*window)->grid);
+
+  free(*window);
+
+  *window = NULL;
+}
+
+/*
  * Free window struct
  */
 static inline void tui_window_free(tui_window_t** window)
 {
   if (!window || !(*window)) return;
 
-  if ((*window)->is_text)
+  switch ((*window)->type)
   {
-    tui_window_text_free((tui_window_text_t**) window);
-  }
-  else
-  {
-    tui_window_parent_free((tui_window_parent_t**) window);
+    case TUI_WINDOW_PARENT:
+      tui_window_parent_free((tui_window_parent_t**) window);
+      break;
+
+    case TUI_WINDOW_TEXT:
+      tui_window_text_free((tui_window_text_t**) window);
+      break;
+
+    case TUI_WINDOW_GRID:
+      tui_window_grid_free((tui_window_grid_t**) window);
+      break;
+
+    default:
+      break;
   }
 }
 
@@ -1072,6 +1126,26 @@ static inline void tui_window_text_render(tui_window_text_t* window)
   wrefresh(head.window);
 }
 
+/*
+ * Render grid window
+ */
+static inline void tui_window_grid_render(tui_window_grid_t* window)
+{
+  tui_window_t head = window->head;
+
+  werase(head.window);
+
+  tui_window_fill((tui_window_t*) window);
+
+  // Draw grid
+  if (window->grid)
+  {
+
+  }
+
+  wrefresh(head.window);
+}
+
 static inline void tui_window_render(tui_window_t* window);
 
 /*
@@ -1102,13 +1176,22 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
  */
 static inline void tui_window_render(tui_window_t* window)
 {
-  if (window->is_text)
+  switch (window->type)
   {
-    tui_window_text_render((tui_window_text_t*) window);
-  }
-  else
-  {
-    tui_window_parent_render((tui_window_parent_t*) window);
+    case TUI_WINDOW_PARENT:
+      tui_window_parent_render((tui_window_parent_t*) window);
+      break;
+
+    case TUI_WINDOW_TEXT:
+      tui_window_text_render((tui_window_text_t*) window);
+      break;
+
+    case TUI_WINDOW_GRID:
+      tui_window_grid_render((tui_window_grid_t*) window);
+      break;
+
+    default:
+      break;
   }
 }
 
@@ -1161,6 +1244,41 @@ static inline void tui_window_text_size_calc(tui_window_text_t* window)
     int w = tui_text_w_get(window->text, h);
 
     window->head._rect = (tui_rect_t) { .w = w, .h = h};
+  }
+}
+
+/*
+ * Calculate preliminary size of grid window, based on grid
+ *
+ * Size is temporarily stored in _rect
+ */
+static inline void tui_window_grid_size_calc(tui_window_grid_t* window)
+{
+  // Text window contains at least the cursor
+  window->head._rect = (tui_rect_t) { .w = 1, .h = 1 };
+
+  if (!window->grid)
+  {
+    window->head._rect = TUI_RECT_NONE;
+
+    return;
+  }
+
+  if (!window->head.rect.is_none)
+  {
+    window->head._rect = (tui_rect_t)
+    {
+      .w = MAX(0, window->head.rect.w),
+      .h = MAX(0, window->head.rect.h)
+    };
+  }
+  else
+  {
+    window->head._rect = (tui_rect_t)
+    {
+      .w = window->size.w,
+      .h = window->size.h,
+    };
   }
 }
 
@@ -1265,13 +1383,22 @@ static inline void tui_window_parent_size_calc(tui_window_parent_t* parent)
  */
 static inline void tui_window_size_calc(tui_window_t* window)
 {
-  if (window->is_text)
+  switch (window->type)
   {
-    tui_window_text_size_calc((tui_window_text_t*) window);
-  }
-  else
-  {
-    tui_window_parent_size_calc((tui_window_parent_t*) window);
+    case TUI_WINDOW_PARENT:
+      tui_window_parent_size_calc((tui_window_parent_t*) window);
+      break;
+
+    case TUI_WINDOW_TEXT:
+      tui_window_text_size_calc((tui_window_text_t*) window);
+      break;
+
+    case TUI_WINDOW_GRID:
+      tui_window_grid_size_calc((tui_window_grid_t*) window);
+      break;
+
+    default:
+      break;
   }
 }
 
@@ -1655,7 +1782,7 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
     child->window = tui_ncurses_window_update(child->window, child->_rect);
 
-    if (!child->is_text)
+    if (child->type == TUI_WINDOW_PARENT)
     {
       tui_children_rect_calc((tui_window_parent_t*) child);
     }
@@ -1674,7 +1801,7 @@ static inline void tui_window_rect_calc(tui_window_t* window, int w, int h)
 
   window->window = tui_ncurses_window_update(window->window, window->_rect);
 
-  if(!window->is_text)
+  if(window->type == TUI_WINDOW_PARENT)
   {
     tui_children_rect_calc((tui_window_parent_t*) window);
   }
@@ -1829,7 +1956,7 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
 
   tui_window_t head = (tui_window_t)
   {
-    .is_text   = false,
+    .type      = TUI_WINDOW_PARENT,
     .name      = config.name,
     .rect      = config.rect,
     .is_hidden = config.is_hidden,
@@ -1885,7 +2012,7 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_
 
   tui_window_t head = (tui_window_t)
   {
-    .is_text   = true,
+    .type      = TUI_WINDOW_TEXT,
     .name      = config.name,
     .rect      = config.rect,
     .is_hidden = config.is_hidden,
@@ -1902,6 +2029,70 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_
     .pos       = config.pos,
     .align     = config.align
   };
+
+  return window;
+}
+
+/*
+ * Configuration struct for grid window
+ */
+typedef struct tui_window_grid_config_t
+{
+  char*              name;
+  tui_window_event_t event;
+  tui_rect_t         rect;
+  tui_color_t        color;
+  bool               is_hidden;
+  tui_size_t         size;
+  void*              data;
+} tui_window_grid_config_t;
+
+/*
+ * Just create tui_window_grid_t* object
+ */
+static inline tui_window_grid_t* _tui_window_grid_create(tui_t* tui, tui_window_grid_config_t config)
+{
+  tui_window_grid_t* window = malloc(sizeof(tui_window_grid_t));
+
+  if (!window)
+  {
+    return NULL;
+  }
+
+  memset(window, 0, sizeof(tui_window_grid_t));
+
+  tui_window_t head = (tui_window_t)
+  {
+    .type      = TUI_WINDOW_GRID,
+    .name      = config.name,
+    .rect      = config.rect,
+    .is_hidden = config.is_hidden,
+    .color     = config.color,
+    .event     = config.event,
+    .tui       = tui
+  };
+
+  *window = (tui_window_grid_t)
+  {
+    .head = head,
+    .size = config.size,
+  };
+
+  if (config.size.w <= 0 || config.size.h <= 0)
+  {
+    free(window);
+
+    return NULL;
+  }
+
+  window->grid = malloc(sizeof(tui_window_grid_square_t) * config.size.w * config.size.h);
+
+  if (!window->grid)
+  {
+    free(window);
+
+    return NULL;
+  }
 
   return window;
 }
@@ -2062,6 +2253,76 @@ tui_window_text_t* tui_parent_child_text_create(tui_window_parent_t* parent, tui
   if (tui_windows_window_append(&parent->children, &parent->child_count, (tui_window_t*) child) != 0)
   {
     tui_window_text_free(&child);
+
+    return NULL;
+  }
+
+  return child;
+}
+
+/*
+ * Create grid window and add it to tui
+ */
+tui_window_grid_t* tui_window_grid_create(tui_t* tui, tui_window_grid_config_t config)
+{
+  tui_window_grid_t* window = _tui_window_grid_create(tui, config);
+
+  if (!window)
+  {
+    return NULL;
+  }
+
+  if (tui_windows_window_append(&tui->windows, &tui->window_count, (tui_window_t*) window) != 0)
+  {
+    tui_window_grid_free(&window);
+
+    return NULL;
+  }
+
+  return window;
+}
+
+/*
+ * Create grid window and add it to menu
+ */
+tui_window_grid_t* tui_menu_window_grid_create(tui_menu_t* menu, tui_window_grid_config_t config)
+{
+  tui_window_grid_t* window = _tui_window_grid_create(menu->tui, config);
+
+  if (!window)
+  {
+    return NULL;
+  }
+
+  window->head.menu = menu;
+
+  if (tui_windows_window_append(&menu->windows, &menu->window_count, (tui_window_t*) window) != 0)
+  {
+    tui_window_grid_free(&window);
+
+    return NULL;
+  }
+
+  return window;
+}
+
+/*
+ * Create grid window and add it to window as child
+ */
+tui_window_grid_t* tui_parent_child_grid_create(tui_window_parent_t* parent, tui_window_grid_config_t config)
+{
+  tui_window_grid_t* child = _tui_window_grid_create(parent->head.tui, config);
+
+  if (!child)
+  {
+    return NULL;
+  }
+
+  child->head.parent = parent;
+
+  if (tui_windows_window_append(&parent->children, &parent->child_count, (tui_window_t*) child) != 0)
+  {
+    tui_window_grid_free(&child);
 
     return NULL;
   }
@@ -2659,15 +2920,15 @@ bool tui_tab_forward(tui_t* tui)
 
   tui_window_parent_t* parent;
 
-  if (window->is_text)
-  {
-    parent = window->parent;
-  }
-  else
+  if (window->type == TUI_WINDOW_PARENT)
   {
     parent = (tui_window_parent_t*) window;
 
     window = NULL;
+  }
+  else
+  {
+    parent = window->parent;
   }
 
   while (parent)

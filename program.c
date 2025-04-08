@@ -139,35 +139,6 @@ bool side_window_key(tui_window_t* head, int key)
  */
 int main(int argc, char* argv[])
 {
-  stock_t* stock = stock_get("woignw", "1d");
-
-  if (stock)
-  {
-    printf("Name     : %s\n", stock->name);
-    printf("Currency : %s\n", stock->currency);
-    printf("Symbol   : %s\n", stock->symbol);
-    printf("Range    : %s\n", stock->range);
-
-    printf("High     : %.2f\n", stock->high);
-    printf("Low      : %.2f\n", stock->low);
-
-    /*
-    for (size_t index = 0; index < stock->value_count; index++)
-    {
-      stock_value_t value = stock->values[index];
-
-      printf("Time: %d\n", value.time);
-      printf("  Open  : %.2f\n", value.open);
-      printf("  Close : %.2f\n", value.close);
-      printf("  High  : %.2f\n", value.high);
-      printf("  Low   : %.2f\n", value.low);
-    }
-    */
-
-    stock_free(&stock);
-  }
-
-  /*
   debug_file_open("debug.log");
 
   if(tui_init() != 0)
@@ -279,6 +250,18 @@ int main(int argc, char* argv[])
     .pos = TUI_POS_CENTER,
     .align = TUI_ALIGN_CENTER,
   });
+
+  tui_window_grid_t* grid = tui_parent_child_grid_create(middle, (tui_window_grid_config_t)
+  {
+    .rect = TUI_RECT_NONE,
+    .color.bg = TUI_COLOR_RED,
+    .size = (tui_size_t)
+    {
+      .w = 10,
+      .h = 10,
+    },
+  });
+
 
   char* left_strings[] =
   {
@@ -449,7 +432,6 @@ int main(int argc, char* argv[])
   info_print("Quitted TUI");
 
   debug_file_close();
-  */
 
   return 0;
 }
