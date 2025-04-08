@@ -1376,7 +1376,7 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
 
     h_gap += gap;
 
-    if (h_space - gap * (align_count - 1) > align_index)
+    if (h_space - gap * (align_count - 1) >= align_index)
     {
       h_gap += 1;
     }
@@ -1473,7 +1473,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
     w_gap += gap;
 
     // Add extra gap between first windows
-    if (w_space - gap * (align_count - 1) > align_index)
+    if (w_space - gap * (align_count - 1) >= align_index)
     {
       w_gap += 1;
     }
