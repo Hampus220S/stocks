@@ -143,7 +143,7 @@ typedef struct tui_window_text_t   tui_window_text_t;
 typedef struct tui_window_grid_t   tui_window_grid_t;
 
 /*
- *
+ * Type of window
  */
 typedef enum tui_window_type_t
 {
@@ -373,11 +373,19 @@ static inline tui_color_t tui_color_inherit(tui_t* tui, tui_window_t* window, tu
 }
 
 /*
- * Set color of window
+ * Turn on color of window
  */
-static inline void tui_window_color_set(tui_window_t* window, tui_color_t color)
+static inline void tui_window_color_on(tui_window_t* window, tui_color_t color)
 {
   wattron(window->window, COLOR_PAIR(tui_color_index_get(color)));
+}
+
+/*
+ * Turn off color of window
+ */
+static inline void tui_window_color_off(tui_window_t* window, tui_color_t color)
+{
+  wattroff(window->window, COLOR_PAIR(tui_color_index_get(color)));
 }
 
 /*
@@ -422,9 +430,11 @@ void tui_border_draw(tui_window_parent_t* window)
 
   tui_color_t color = tui_color_inherit(head.tui, (tui_window_t*) window, border.color);
 
-  wattron(head.window, COLOR_PAIR(tui_color_index_get(color)));
+  tui_window_color_on((tui_window_t*) window, color);
 
   box(head.window, 0, 0);
+
+  tui_window_color_off((tui_window_t*) window, color);
 }
 
 /*
@@ -960,7 +970,7 @@ static inline void tui_string_ansi_handle(tui_window_t* window, char* ansi, int 
 
     wattroff(window->window, A_ATTRIBUTES);
 
-    tui_window_color_set((tui_window_t*) window, window->_color);
+    tui_window_color_on((tui_window_t*) window, window->_color);
   }
   // Cursor on
   else if (code == 5)
@@ -976,14 +986,14 @@ static inline void tui_string_ansi_handle(tui_window_t* window, char* ansi, int 
   {
     color->fg = code - 30;
 
-    tui_window_color_set((tui_window_t*) window, *color);
+    tui_window_color_on((tui_window_t*) window, *color);
   }
   // Background color
   else if (code >= 40 && code <= 47)
   {
     color->bg = code - 40;
 
-    tui_window_color_set((tui_window_t*) window, *color);
+    tui_window_color_on((tui_window_t*) window, *color);
   }
 }
 
@@ -1140,7 +1150,28 @@ static inline void tui_window_grid_render(tui_window_grid_t* window)
   // Draw grid
   if (window->grid)
   {
+    int x_shift = MAX(0, (head._rect.w - window->size.w) / 2.f);
+    int y_shift = MAX(0, (head._rect.h - window->size.h) / 2.f);
 
+    for (int y = 0; y < window->size.h; y++)
+    {
+      for (int x = 0; x < window->size.w; x++)
+      {
+        int index = y * window->size.w + x;
+
+        tui_window_grid_square_t square = window->grid[index];
+
+        char symbol = square.symbol ? square.symbol : ' ';
+
+        tui_color_t color = tui_color_inherit(head.tui, (tui_window_t*) window, square.color);
+
+        tui_window_color_on((tui_window_t*) window, color);
+
+        mvwaddch(head.window, y_shift + y, x_shift + x, symbol);
+
+        tui_window_color_off((tui_window_t*) window, color);
+      }
+    }
   }
 
   wrefresh(head.window);
@@ -2085,7 +2116,9 @@ static inline tui_window_grid_t* _tui_window_grid_create(tui_t* tui, tui_window_
     return NULL;
   }
 
-  window->grid = malloc(sizeof(tui_window_grid_square_t) * config.size.w * config.size.h);
+  int square_count = config.size.w * config.size.h;
+
+  window->grid = malloc(sizeof(tui_window_grid_square_t) * square_count);
 
   if (!window->grid)
   {
@@ -2093,6 +2126,8 @@ static inline tui_window_grid_t* _tui_window_grid_create(tui_t* tui, tui_window_
 
     return NULL;
   }
+
+  memset(window->grid, 0, sizeof(tui_window_grid_square_t) * square_count);
 
   return window;
 }
@@ -2328,6 +2363,26 @@ tui_window_grid_t* tui_parent_child_grid_create(tui_window_parent_t* parent, tui
   }
 
   return child;
+}
+
+/*
+ * Set color and symbol of square in grid window
+ */
+void tui_window_grid_square_set(tui_window_grid_t* window, int x, int y, tui_color_t color, char symbol)
+{
+  if (x < 0 || x >= window->size.w ||
+      y < 0 || y >= window->size.h)
+  {
+    return;
+  }
+
+  int index = y * window->size.w + x;
+
+  window->grid[index] = (tui_window_grid_square_t)
+  {
+    .color  = color,
+    .symbol = symbol,
+  };
 }
 
 /*

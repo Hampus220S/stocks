@@ -257,11 +257,16 @@ int main(int argc, char* argv[])
     .color.bg = TUI_COLOR_RED,
     .size = (tui_size_t)
     {
-      .w = 10,
+      .w = 20,
       .h = 10,
     },
   });
 
+  tui_window_grid_square_set(grid, 1, 2, (tui_color_t)
+  {
+    .fg = TUI_COLOR_BLACK,
+    .bg = TUI_COLOR_NONE,
+  }, 'X');
 
   char* left_strings[] =
   {
