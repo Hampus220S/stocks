@@ -3,7 +3,7 @@
  *
  * Written by Hampus Fridholm
  *
- * Last updated: 2025-04-05
+ * Last updated: 2025-04-08
  *
  * This library depends on debug.h
  */
@@ -614,6 +614,8 @@ static inline void tui_window_free(tui_window_t** window)
  */
 static inline void tui_windows_free(tui_window_t*** windows, size_t* count)
 {
+  if (!windows || !(*windows)) return;
+
   for (size_t index = 0; index < *count; index++)
   {
     tui_window_free(&(*windows)[index]);
@@ -1327,9 +1329,11 @@ static inline int tui_child_x_get(tui_window_parent_t* parent)
 /*
  * Calculate rect of vertically aligned child
  *
+ * align_count and align_index must be int, because they are used in integer arithmetic
+ *
  * Maybe: Remove rect argument and use child->_rect instead
  */
-static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, size_t align_count, size_t align_index)
+static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int align_index)
 {
   if (align_index == 0)
   {
@@ -1351,13 +1355,15 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
       // Add this gap after current child
       h_gap += 1;
       
-      h_space = MAX(0, h_space - align_count + 1); 
+      // recalculate h_space as the extra infalted height between windows
+      h_space = MAX(0, h_space - (align_count - 1) * 1); 
     }
 
     int gap = h_space / align_count;
 
     h += gap;
 
+    // Inflate first windows a little bit more to fill out extra padding
     if (h_space - gap * align_count > align_index)
     {
       h += 1;
@@ -1396,7 +1402,7 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
       // Add this gap before current child
       if (parent->has_padding)
       {
-        h_space = MAX(0, h_space - align_count + 1); 
+        h_space = MAX(0, h_space - (align_count - 1) * 1); 
       }
 
       rect->y += (float) parent->align / 2.f * h_space;
@@ -1424,7 +1430,7 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
 /*
  * Calculate rect of horizontally aligned child
  */
-static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, size_t align_count, size_t align_index)
+static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int align_index)
 {
   if (align_index == 0)
   {
@@ -1444,15 +1450,16 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
     if (parent->has_padding)
     {
       // Add this gap after current child
-      w_gap += 1;
-      
-      w_space = MAX(0, w_space - align_count + 1); 
+      w_gap += 2;
+
+      w_space = MAX(0, w_space - (align_count - 1) * 2); 
     }
 
     int gap = w_space / align_count;
 
     w += gap;
 
+    // Inflate first windows a little bit more to fill out extra padding
     if (w_space - gap * align_count > align_index)
     {
       w += 1;
@@ -1465,6 +1472,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
 
     w_gap += gap;
 
+    // Add extra gap between first windows
     if (w_space - gap * (align_count - 1) > align_index)
     {
       w_gap += 1;
@@ -1490,7 +1498,9 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
       // Add this gap before current child
       if (parent->has_padding)
       {
-        w_space = MAX(0, w_space - align_count + 1); 
+        // Remove all space between windows 
+        // not including padding around the border
+        w_space = MAX(0, w_space - (align_count - 1) * 2); 
       }
 
       rect->x += (float) parent->align / 2.f * w_space;
@@ -1518,7 +1528,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
 /*
  * Calculate rect of aligned child
  */
-static inline void tui_child_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, size_t align_count, size_t align_index)
+static inline void tui_child_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int align_index)
 {
   if (parent->is_vertical)
   {
@@ -1597,7 +1607,6 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
   if (parent->has_padding)
   {
     max_size.w -= 4;
-
     max_size.h -= 2;
   }
 

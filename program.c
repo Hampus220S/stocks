@@ -201,14 +201,17 @@ int main(int argc, char* argv[])
     .has_padding = true,
     .event.key = &panel_window_key,
     .event.enter = &panel_window_enter,
-    .is_inflated = true,
+    .align = TUI_ALIGN_END,
+    .pos = TUI_POS_END,
+    .is_inflated = false,
+    .is_vertical = false,
   });
 
   tui_window_parent_t* left = tui_parent_child_parent_create(panel, (tui_window_parent_config_t)
   {
     .color = (tui_color_t)
     {
-      .bg = TUI_COLOR_BLUE,
+      .bg = TUI_COLOR_YELLOW,
     },
     .rect = TUI_RECT_NONE,
     .is_vertical = true,
@@ -229,6 +232,20 @@ int main(int argc, char* argv[])
     .event.exit = &side_text_exit,
   });
 
+  tui_window_parent_t* middle = tui_parent_child_parent_create(panel, (tui_window_parent_config_t)
+  {
+    .color = (tui_color_t)
+    {
+      .bg = TUI_COLOR_MAGENTA,
+    },
+    .rect = TUI_RECT_NONE,
+    .is_vertical = true,
+    .is_inflated = false,
+    .has_padding = true,
+    .pos = TUI_POS_CENTER,
+    .align = TUI_ALIGN_CENTER,
+  });
+
   char* left_strings[] =
   {
     "banana",
@@ -245,6 +262,12 @@ int main(int argc, char* argv[])
       .rect = TUI_RECT_NONE,
       .event.enter = &side_item_enter,
       .event.exit = &side_item_exit,
+    });
+
+    tui_parent_child_text_create(middle, (tui_window_text_config_t)
+    {
+      .string = left_strings[index],
+      .rect = TUI_RECT_NONE,
     });
   }
 
@@ -268,7 +291,7 @@ int main(int argc, char* argv[])
   {
     .color = (tui_color_t)
     {
-      .bg = TUI_COLOR_BLUE,
+      .bg = TUI_COLOR_RED,
     },
     .rect = TUI_RECT_NONE,
     .is_vertical = true,
@@ -286,6 +309,19 @@ int main(int argc, char* argv[])
     .color.bg = TUI_COLOR_MAGENTA,
     .event.enter = &side_text_enter,
     .event.exit = &side_text_exit,
+  });
+
+  tui_window_parent_t* middle2 = tui_parent_child_parent_create(panel, (tui_window_parent_config_t)
+  {
+    .color = (tui_color_t)
+    {
+      .bg = TUI_COLOR_BLUE,
+    },
+    .rect = TUI_RECT_NONE,
+    .is_vertical = true,
+    .is_inflated = false,
+    .pos = TUI_POS_CENTER,
+    .align = TUI_ALIGN_CENTER,
   });
 
   char* right_strings[] =
@@ -307,6 +343,12 @@ int main(int argc, char* argv[])
       .event.enter = &side_item_enter,
       .event.exit = &side_item_exit,
     });
+
+    tui_parent_child_text_create(middle2, (tui_window_text_config_t)
+    {
+      .string = right_strings[index],
+      .rect = TUI_RECT_NONE,
+    });
   }
 
   side_data_t* right_data = malloc(sizeof(side_data_t));
@@ -327,10 +369,9 @@ int main(int argc, char* argv[])
 
   tui_list_t* list = tui_list_create(tui, panel->is_vertical);
 
-  for (size_t index = 0; index < panel->child_count; index++)
-  {
-    tui_list_item_add(list, panel->children[index]);
-  }
+  tui_list_item_add(list, (tui_window_t*) left);
+
+  tui_list_item_add(list, (tui_window_t*) right);
 
   panel->head.data = list;
 
