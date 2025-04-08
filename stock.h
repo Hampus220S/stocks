@@ -7,6 +7,9 @@
 #ifndef STOCK_H
 #define STOCK_H
 
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MIN(a, b) (((a) > (b)) ? (b) : (a))
+
 /*
  * Stock value struct
  */
@@ -30,6 +33,8 @@ typedef struct stock_t
   char*          currency;
   stock_value_t* values;
   size_t         value_count;
+  double         high;
+  double         low;
 } stock_t;
 
 /*
@@ -137,8 +142,6 @@ static inline char* stock_response_get(char* symbol, char* range)
 
     return NULL;
   }
-
-  info_print("URL: %s\n", url);
 
   curl_easy_setopt(curl, CURLOPT_URL, url);
 
@@ -469,6 +472,22 @@ stock_t* stock_get(char* symbol, char* range)
   }
 
   json_object_put(json);
+
+  if (stock->value_count > 0)
+  {
+    stock_value_t value = stock->values[0];
+
+    stock->high = value.high;
+    stock->low  = value.low;
+
+    for (size_t index = 1; index < stock->value_count; index++)
+    {
+      value = stock->values[index];
+
+      stock->high = MAX(stock->high, value.high);
+      stock->low  = MIN(stock->low,  value.low);
+    }
+  }
 
   return stock;
 }

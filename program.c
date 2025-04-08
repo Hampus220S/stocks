@@ -139,7 +139,7 @@ bool side_window_key(tui_window_t* head, int key)
  */
 int main(int argc, char* argv[])
 {
-  stock_t* stock = stock_get("TSLA", "1d");
+  stock_t* stock = stock_get("woignw", "1d");
 
   if (stock)
   {
@@ -148,6 +148,10 @@ int main(int argc, char* argv[])
     printf("Symbol   : %s\n", stock->symbol);
     printf("Range    : %s\n", stock->range);
 
+    printf("High     : %.2f\n", stock->high);
+    printf("Low      : %.2f\n", stock->low);
+
+    /*
     for (size_t index = 0; index < stock->value_count; index++)
     {
       stock_value_t value = stock->values[index];
@@ -158,6 +162,7 @@ int main(int argc, char* argv[])
       printf("  High  : %.2f\n", value.high);
       printf("  Low   : %.2f\n", value.low);
     }
+    */
 
     stock_free(&stock);
   }
