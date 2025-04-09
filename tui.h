@@ -53,6 +53,8 @@ typedef struct tui_window_event_t
   void (*enter)  (tui_window_t* window);
   void (*exit)   (tui_window_t* window);
   void (*render) (tui_window_t* window);
+  void (*free)   (tui_window_t* window);
+  void (*init)   (tui_window_t* window);
 } tui_window_event_t;
 
 /*
@@ -655,6 +657,11 @@ static inline void tui_window_grid_free(tui_window_grid_t** window)
 static inline void tui_window_free(tui_window_t** window)
 {
   if (!window || !(*window)) return;
+
+  if ((*window)->event.free)
+  {
+    (*window)->event.free(*window);
+  }
 
   switch ((*window)->type)
   {

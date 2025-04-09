@@ -90,6 +90,17 @@ typedef struct side_data_t
   tui_list_t*  list;
 } side_data_t;
 
+void side_window_free(tui_window_t* window)
+{
+  side_data_t* data = window->data;
+
+  tui_list_delete(&data->list);
+
+  tui_input_delete(&data->input);
+
+  free(data);
+}
+
 void side_window_enter(tui_window_t* window)
 {
   side_data_t* data = window->data;
@@ -240,6 +251,16 @@ static void grid_stock_update(tui_window_t* window)
 /*
  *
  */
+void grid_window_free(tui_window_t* head)
+{
+  tui_window_grid_t* window = (tui_window_grid_t*) head;
+
+  stock_free((stock_t**) &head->data);
+}
+
+/*
+ *
+ */
 void grid_window_render(tui_window_t* head)
 {
   info_print("Grid render: w:%d h:%d", head->_rect.w, head->_rect.h);
@@ -353,6 +374,16 @@ void grid_window_render(tui_window_t* head)
 }
 
 /*
+ *
+ */
+void panel_window_free(tui_window_t* head)
+{
+  tui_list_t* list = head->data;
+
+  tui_list_delete(&list);
+}
+
+/*
  * Main function
  */
 int main(int argc, char* argv[])
@@ -428,6 +459,7 @@ int main(int argc, char* argv[])
     .pos = TUI_POS_END,
     .is_inflated = true,
     .is_vertical = false,
+    .event.free = &panel_window_free,
   });
 
   tui_window_parent_t* left = tui_parent_child_parent_create(panel, (tui_window_parent_config_t)
@@ -441,6 +473,7 @@ int main(int argc, char* argv[])
     .event.enter = &side_window_enter,
     .event.exit = &side_window_exit,
     .event.key = &side_window_key,
+    .event.free = &side_window_free,
     .is_inflated = false,
     .has_padding = true,
     .pos = TUI_POS_CENTER,
@@ -491,6 +524,7 @@ int main(int argc, char* argv[])
     },
     .event.render = &grid_window_render,
     .data = stock_get("AAPL", "3mo", "4h"),
+    .event.free = &grid_window_free,
   });
 
   char* left_strings[] =
@@ -545,6 +579,7 @@ int main(int argc, char* argv[])
     .event.enter = &side_window_enter,
     .event.exit = &side_window_exit,
     .event.key = &side_window_key,
+    .event.free = &side_window_free,
     .is_inflated = false,
     .pos = TUI_POS_CENTER,
     .align = TUI_ALIGN_CENTER,
@@ -634,32 +669,9 @@ int main(int argc, char* argv[])
 
   tui_stop(tui);
 
-
-  tui_list_delete(&left_data->list);
-
-  tui_input_delete(&left_data->input);
-
-  free(left_data);
-
-
-  tui_list_delete(&right_data->list);
-
-  tui_input_delete(&right_data->input);
-
-  free(right_data);
-
-
-  tui_list_delete(&list);
-
-  stock_t* stock = grid->head.data;
-
-  stock_free(&stock);
-
-
   tui_delete(&tui);
 
   info_print("Deleted TUI");
-
 
   tui_quit();
 
