@@ -139,15 +139,118 @@ static inline int grid_stock_y_get(int max, int min, int h, int value)
   return (float) h * (float) (value - min) / (float) (max - min);
 }
 
+const char* STOCK_RANGES[]    = { "1d", "5d", "1mo", "3mo", "6mo", "1y", "2y" };
+
+const char* STOCK_INTERVALS[] = { "5m", "30m", "90m", "4h", "1d", "5d", "1wk" };
+
+
+#define STOCK_RANGE_COUNT (sizeof(STOCK_RANGES) / sizeof(char*))
+
+#define STOCK_INTERVAL_COUNT (sizeof(STOCK_INTERVALS) / sizeof(char*))
+
+/*
+ *
+ */
+static const char* stock_range_get(int index)
+{
+  if (index >= 0 && index < STOCK_RANGE_COUNT)
+  {
+    return STOCK_RANGES[index];
+  }
+
+  return NULL;
+}
+
+/*
+ *
+ */
+static ssize_t stock_range_index_get(const char* range)
+{
+  for (ssize_t index = 0; index < STOCK_RANGE_COUNT; index++)
+  {
+    if (strcmp(STOCK_RANGES[index], range) == 0)
+    {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+/*
+ *
+ */
+static const char* stock_interval_get(int index)
+{
+  if (index >= 0 && index < STOCK_INTERVAL_COUNT)
+  {
+    return STOCK_INTERVALS[index];
+  }
+
+  return NULL;
+}
+
+/*
+ *
+ */
+static ssize_t stock_interval_index_get(const char* interval)
+{
+  for (ssize_t index = 0; index < STOCK_INTERVAL_COUNT; index++)
+  {
+    if (strcmp(STOCK_INTERVALS[index], interval) == 0)
+    {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+/*
+ *
+ */
+static void grid_stock_update(tui_window_t* window)
+{
+  stock_t* stock = window->data;
+
+  ssize_t index = stock_range_index_get(stock->range);
+
+  if (index == -1)
+  {
+    index = 0;
+  }
+
+  const char* interval = stock_interval_get(index);
+
+  if (!interval)
+  {
+    interval = "1m";
+  }
+
+  stock_t* new_stock = stock_get(stock->symbol, stock->range, (char*) interval);
+
+  if (new_stock)
+  {
+    stock_free(&stock);
+
+    window->data = new_stock;
+  }
+}
+
+/*
+ *
+ */
 void grid_window_render(tui_window_t* head)
 {
   info_print("Grid render: w:%d h:%d", head->_rect.w, head->_rect.h);
   
   tui_window_grid_t* window = (tui_window_grid_t*) head;
 
-  stock_t* stock = head->data;
+  if (!head->data) return;
 
-  if (!stock) return;
+  // grid_stock_update(head);
+
+  stock_t* stock = head->data;
 
   tui_size_t size = { .w = head->_rect.w, .h = head->_rect.h };
 
@@ -156,8 +259,6 @@ void grid_window_render(tui_window_t* head)
     error_print("tui_window_grid_resize");
   }
 
-
-
   stock_value_t value = stock->values[stock->value_count - 1];
 
   int max = value.high;
@@ -165,8 +266,6 @@ void grid_window_render(tui_window_t* head)
   int min = value.low;
 
   int count = (float) head->_rect.w / 2.f;
-
-  info_print("COUNT: %d", count);
 
   for (int index = 1; index < count; index++)
   {
@@ -179,10 +278,12 @@ void grid_window_render(tui_window_t* head)
     min = MIN(min, value.low);
   }
 
+  /*
   info_print("max: %d", max);
   info_print("min: %d", min);
   info_print("high: %d", stock->high);
   info_print("low:  %d", stock->low);
+  */
 
   for (int index = 0; index < count; index++)
   {
@@ -204,11 +305,13 @@ void grid_window_render(tui_window_t* head)
 
     int second = MIN(close, open);
 
+    /*
     info_print("index: %d", index);
     info_print("  high   : %d", high);
     info_print("  first  : %d", first);
     info_print("  second : %d", second);
     info_print("  low    : %d", low);
+    */
 
     short color = (close > open) ? TUI_COLOR_GREEN : TUI_COLOR_RED;
 
@@ -377,8 +480,6 @@ int main(int argc, char* argv[])
     .color.bg = TUI_COLOR_CYAN,
   });
 
-  stock_t* stock = stock_get("AAPL", "1wk", "2m");
-
   tui_window_grid_t* grid = tui_parent_child_grid_create(root2, (tui_window_grid_config_t)
   {
     .rect = TUI_RECT_NONE,
@@ -389,42 +490,8 @@ int main(int argc, char* argv[])
       .h = 10,
     },
     .event.render = &grid_window_render,
-    .data = stock,
+    .data = stock_get("AAPL", "3mo", "4h"),
   });
-
-  stock_t* stock2 = stock_get("TSLA", "1d", NULL);
-
-  /*
-  tui_window_grid_t* grid2 = tui_parent_child_grid_create(root2, (tui_window_grid_config_t)
-  {
-    .rect = TUI_RECT_NONE,
-    .color.bg = TUI_COLOR_BLACK,
-    .size = (tui_size_t)
-    {
-      .w = 20,
-      .h = 10,
-    },
-    .event.render = &grid_window_render,
-    .data = stock2,
-  });
-  */
-
-  stock_t* stock3 = stock_get("NVDA", "5d", NULL);
-
-  /*
-  tui_window_grid_t* grid3 = tui_parent_child_grid_create(root2, (tui_window_grid_config_t)
-  {
-    .rect = TUI_RECT_NONE,
-    .color.bg = TUI_COLOR_BLACK,
-    .size = (tui_size_t)
-    {
-      .w = 20,
-      .h = 10,
-    },
-    .event.render = &grid_window_render,
-    .data = stock3,
-  });
-  */
 
   char* left_strings[] =
   {
@@ -584,9 +651,9 @@ int main(int argc, char* argv[])
 
   tui_list_delete(&list);
 
+  stock_t* stock = grid->head.data;
+
   stock_free(&stock);
-  stock_free(&stock2);
-  stock_free(&stock3);
 
 
   tui_delete(&tui);
