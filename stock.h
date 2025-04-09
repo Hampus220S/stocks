@@ -30,6 +30,7 @@ typedef struct stock_t
   char*          symbol;
   char*          name;
   char*          range;
+  char*          interval;
   char*          currency;
   stock_value_t* values;
   size_t         value_count;
@@ -41,7 +42,7 @@ typedef struct stock_t
  * Function declarations
  */
 
-extern stock_t* stock_get(char* symbol, char* range);
+extern stock_t* stock_get(char* symbol, char* range, char* interval);
 
 extern void     stock_free(stock_t** stock);
 
@@ -70,7 +71,7 @@ static inline size_t stock_response_write(void* ptr, size_t size, size_t nmemb, 
 /*
  * Create url for fetching stock data
  */
-static inline char* stock_url_create(char* symbol, char* range)
+static inline char* stock_url_create(char* symbol, char* range, char* interval)
 {
   if (!symbol)
   {
@@ -91,7 +92,14 @@ static inline char* stock_url_create(char* symbol, char* range)
     return NULL;
   }
 
-  if (range && sprintf(url + strlen(url), "range=%s", range) < 0)
+  if (range && sprintf(url + strlen(url), "range=%s&", range) < 0)
+  {
+    free(url);
+
+    return NULL;
+  }
+
+  if (interval && sprintf(url + strlen(url), "interval=%s&", interval) < 0)
   {
     free(url);
 
@@ -108,7 +116,7 @@ static inline char* stock_url_create(char* symbol, char* range)
 /*
  * Get curl response for a stock
  */
-static inline char* stock_response_get(char* symbol, char* range)
+static inline char* stock_response_get(char* symbol, char* range, char* interval)
 {
   curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -132,7 +140,7 @@ static inline char* stock_response_get(char* symbol, char* range)
 
   memset(response, '\0', sizeof(char) * STOCK_RESPONSE_SIZE);
 
-  char* url = stock_url_create(symbol, range);
+  char* url = stock_url_create(symbol, range, interval);
 
   if (!url)
   {
@@ -392,9 +400,9 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
 /*
  * Get stock data from the internet
  */
-stock_t* stock_get(char* symbol, char* range)
+stock_t* stock_get(char* symbol, char* range, char* interval)
 {
-  char* response = stock_response_get(symbol, range);
+  char* response = stock_response_get(symbol, range, interval);
 
   if (!response)
   {
@@ -508,6 +516,8 @@ void stock_free(stock_t** stock)
   free((*stock)->currency);
 
   free((*stock)->range);
+
+  free((*stock)->interval);
 
   free(*stock);
 

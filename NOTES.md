@@ -6,6 +6,7 @@
 
 ## Maybe
 - Remove rect argument and use child->_rect instead
+- move is_inflated from parent to specific children
 
 ## Future
 - fix tui_tab_forward and tui_tab_backward

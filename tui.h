@@ -49,9 +49,10 @@ typedef struct tui_window_t tui_window_t;
  */
 typedef struct tui_window_event_t
 {
-  bool (*key)  (tui_window_t* window, int key);
-  void (*enter)(tui_window_t* window);
-  void (*exit) (tui_window_t* window);
+  bool (*key)    (tui_window_t* window, int key);
+  void (*enter)  (tui_window_t* window);
+  void (*exit)   (tui_window_t* window);
+  void (*render) (tui_window_t* window);
 } tui_window_event_t;
 
 /*
@@ -59,9 +60,9 @@ typedef struct tui_window_event_t
  */
 typedef struct tui_menu_event_t
 {
-  bool (*key)  (tui_menu_t* menu, int key);
-  void (*enter)(tui_menu_t* menu);
-  void (*exit) (tui_menu_t* menu);
+  bool (*key)   (tui_menu_t* menu, int key);
+  void (*enter) (tui_menu_t* menu);
+  void (*exit)  (tui_menu_t* menu);
 } tui_menu_event_t;
 
 /*
@@ -69,7 +70,7 @@ typedef struct tui_menu_event_t
  */
 typedef struct tui_event_t
 {
-  bool (*key)(tui_t* tui, int key);
+  bool (*key) (tui_t* tui, int key);
 } tui_event_t;
 
 /*
@@ -238,6 +239,7 @@ typedef struct tui_window_grid_t
 {
   tui_window_t              head;
   tui_size_t                size;
+  tui_size_t                _size;
   tui_window_grid_square_t* grid;
 } tui_window_grid_t;
 
@@ -1150,14 +1152,14 @@ static inline void tui_window_grid_render(tui_window_grid_t* window)
   // Draw grid
   if (window->grid)
   {
-    int x_shift = MAX(0, (head._rect.w - window->size.w) / 2.f);
-    int y_shift = MAX(0, (head._rect.h - window->size.h) / 2.f);
+    int x_shift = MAX(0, (head._rect.w - window->_size.w) / 2.f);
+    int y_shift = MAX(0, (head._rect.h - window->_size.h) / 2.f);
 
-    for (int y = 0; y < window->size.h; y++)
+    for (int y = 0; y < window->_size.h; y++)
     {
-      for (int x = 0; x < window->size.w; x++)
+      for (int x = 0; x < window->_size.w; x++)
       {
-        int index = y * window->size.w + x;
+        int index = y * window->_size.w + x;
 
         tui_window_grid_square_t square = window->grid[index];
 
@@ -1207,6 +1209,11 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
  */
 static inline void tui_window_render(tui_window_t* window)
 {
+  if (window->event.render)
+  {
+    window->event.render(window);
+  }
+
   switch (window->type)
   {
     case TUI_WINDOW_PARENT:
@@ -1993,6 +2000,7 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
     .is_hidden = config.is_hidden,
     .color     = config.color,
     .event     = config.event,
+    .data      = config.data,
     .tui       = tui
   };
 
@@ -2049,6 +2057,7 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_
     .is_hidden = config.is_hidden,
     .color     = config.color,
     .event     = config.event,
+    .data      = config.data,
     .tui       = tui
   };
 
@@ -2079,6 +2088,36 @@ typedef struct tui_window_grid_config_t
 } tui_window_grid_config_t;
 
 /*
+ * Resize grid and store size in _size
+ */
+int tui_window_grid_resize(tui_window_grid_t* window, tui_size_t size)
+{
+  if (size.w <= 0 || size.h <= 0)
+  {
+    return 1;
+  }
+
+  free(window->grid);
+
+  int square_count = size.w * size.h;
+
+  tui_window_grid_square_t* grid = malloc(sizeof(tui_window_grid_square_t) * square_count);
+
+  if (!grid)
+  {
+    return 2;
+  }
+
+  memset(grid, 0, sizeof(tui_window_grid_square_t) * square_count);
+
+  window->grid = grid;
+
+  window->_size = size;
+
+  return 0;
+}
+
+/*
  * Just create tui_window_grid_t* object
  */
 static inline tui_window_grid_t* _tui_window_grid_create(tui_t* tui, tui_window_grid_config_t config)
@@ -2100,6 +2139,7 @@ static inline tui_window_grid_t* _tui_window_grid_create(tui_t* tui, tui_window_
     .is_hidden = config.is_hidden,
     .color     = config.color,
     .event     = config.event,
+    .data      = config.data,
     .tui       = tui
   };
 
@@ -2109,25 +2149,12 @@ static inline tui_window_grid_t* _tui_window_grid_create(tui_t* tui, tui_window_
     .size = config.size,
   };
 
-  if (config.size.w <= 0 || config.size.h <= 0)
+  if (tui_window_grid_resize(window, config.size) != 0)
   {
     free(window);
 
     return NULL;
   }
-
-  int square_count = config.size.w * config.size.h;
-
-  window->grid = malloc(sizeof(tui_window_grid_square_t) * square_count);
-
-  if (!window->grid)
-  {
-    free(window);
-
-    return NULL;
-  }
-
-  memset(window->grid, 0, sizeof(tui_window_grid_square_t) * square_count);
 
   return window;
 }
@@ -2368,21 +2395,17 @@ tui_window_grid_t* tui_parent_child_grid_create(tui_window_parent_t* parent, tui
 /*
  * Set color and symbol of square in grid window
  */
-void tui_window_grid_square_set(tui_window_grid_t* window, int x, int y, tui_color_t color, char symbol)
+void tui_window_grid_square_set(tui_window_grid_t* window, int x, int y, tui_window_grid_square_t square)
 {
-  if (x < 0 || x >= window->size.w ||
-      y < 0 || y >= window->size.h)
+  if (x < 0 || x >= window->_size.w ||
+      y < 0 || y >= window->_size.h)
   {
     return;
   }
 
-  int index = y * window->size.w + x;
+  int index = y * window->_size.w + x;
 
-  window->grid[index] = (tui_window_grid_square_t)
-  {
-    .color  = color,
-    .symbol = symbol,
-  };
+  window->grid[index] = square;
 }
 
 /*
