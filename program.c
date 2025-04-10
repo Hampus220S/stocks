@@ -161,10 +161,9 @@ static inline double grid_stock_value_get(double max, double min, int h, int y)
   return ((double) (h - y) / (double) h) * (max - min) + min;
 }
 
-const char* STOCK_RANGES[]    = { "1d", "5d", "1mo", "3mo", "6mo", "1y" };
+const char* STOCK_RANGES[]    = { "1d", "1wk", "1mo", "1y", "max" };
 
-const char* STOCK_INTERVALS[] = { "1m", "5m", "30m", "1h", "1h", "1h" };
-
+const char* STOCK_INTERVALS[] = { "1m", "15m", "30m", "1h", "1d" };
 
 #define STOCK_RANGE_COUNT (sizeof(STOCK_RANGES) / sizeof(char*))
 
@@ -235,6 +234,7 @@ typedef struct grid_data_t
 {
   tui_grid_t*        grid;
   stock_t*           stock;
+  int                value_index;
   double             _min;
   double             _max;
   char*              string;
@@ -244,13 +244,13 @@ typedef struct grid_data_t
 /*
  *
  */
-static void grid_stock_update(tui_window_t* window)
+static void grid_stock_update(tui_window_t* window, char* range)
 {
   grid_data_t* data = window->data;
 
   stock_t* stock = data->stock;
 
-  ssize_t index = stock_range_index_get(stock->range);
+  ssize_t index = stock_range_index_get(range);
 
   if (index == -1)
   {
@@ -264,7 +264,9 @@ static void grid_stock_update(tui_window_t* window)
     interval = "1m";
   }
 
-  stock_t* new_stock = stock_get(stock->symbol, stock->range, (char*) interval);
+  info_print("stock_get(%s, %s, %s)", stock->symbol, range, (char*) interval);
+
+  stock_t* new_stock = stock_get(stock->symbol, range, (char*) interval);
 
   if (new_stock)
   {
@@ -335,7 +337,7 @@ void grid_window_init(tui_window_t* head)
 
   head->data = data;
 
-  data->stock = stock_get("TSLA", "6mo", "4h");
+  data->stock = stock_get("AAPL", "6mo", "4h");
 
   data->string = malloc(sizeof(char) * 100);
 
@@ -424,15 +426,25 @@ void grid_window_cursor_render(tui_window_t* head)
   
   grid_data_t* data = head->data;
 
+  stock_t* stock = data->stock;
+
+  /*
   tui_grid_t* grid = data->grid;
 
   grid_window_cursor_contain(head);
+  */
 
-  tui_cursor_set(head->tui, head->_rect.x + grid->x, head->_rect.y + grid->y);
+  int cursor_x = MAX(0, head->_rect.w - 1 - (int) data->value_index * 2);
+
+  double value = stock->_values[stock->_value_count - 1 - data->value_index].close;
+
+  int cursor_y = grid_stock_y_get(data->_max, data->_min, head->_rect.h, value);
+
+  tui_cursor_set(head->tui, head->_rect.x + cursor_x, head->_rect.y + cursor_y);
 
   for (int y = 0; y < head->_rect.h; y++)
   {
-    tui_window_grid_square_t* square = tui_window_grid_square_get(window, grid->x, y);
+    tui_window_grid_square_t* square = tui_window_grid_square_get(window, cursor_x, y);
 
     square->symbol = '|';
     square->color.fg = TUI_COLOR_WHITE;
@@ -440,13 +452,13 @@ void grid_window_cursor_render(tui_window_t* head)
 
   for (int x = 0; x < head->_rect.w; x++)
   {
-    tui_window_grid_square_t* square = tui_window_grid_square_get(window, x, grid->y);
+    tui_window_grid_square_t* square = tui_window_grid_square_get(window, x, cursor_y);
 
     square->symbol = '-';
     square->color.fg = TUI_COLOR_WHITE;
   }
 
-  tui_window_grid_square_t* square = tui_window_grid_square_get(window, grid->x, grid->y);
+  tui_window_grid_square_t* square = tui_window_grid_square_get(window, cursor_x, cursor_y);
 
   square->symbol = ' ';
 }
@@ -492,7 +504,7 @@ void grid_window_render2(tui_window_t* head)
   {
     if (index >= stock->_value_count) break;
 
-    int x = (head->_rect.w - (index * 2));
+    int x = (head->_rect.w - 1 - (index * 2));
 
     stock_value_t value = stock->_values[stock->_value_count - 1 - index];
 
@@ -569,7 +581,7 @@ void grid_window_render(tui_window_t* head)
   {
     if (index >= stock->_value_count) break;
 
-    int x = (head->_rect.w - (index * 2));
+    int x = (head->_rect.w - 1 - (index * 2));
 
     stock_value_t value = stock->_values[stock->_value_count - 1 - index];
 
@@ -646,12 +658,14 @@ bool grid_window_key(tui_window_t* head, int key)
   stock_t* stock = data->stock;
   tui_grid_t* grid = data->grid;
 
+  /*
   if (grid && tui_grid_event(grid, key))
   {
     grid_window_string_update(head);
 
     return true;
   }
+  */
 
   switch (key)
   {
@@ -666,28 +680,53 @@ bool grid_window_key(tui_window_t* head, int key)
       }
       return true;
 
+    case KEY_RIGHT:
+      if (data->value_index > 0)
+      {
+        data->value_index--;
+
+        return true;
+      }
+
+      data->value_index = 0;
+
+      return false;
+
+    case KEY_LEFT:
+      if (data->value_index < (stock->_value_count - 1))
+      {
+        data->value_index++;
+
+        return true;
+      }
+
+      data->value_index = stock->_value_count - 1;
+
+      return false;
+
     case 'd':
-      free(stock->range);
+      grid_stock_update(head, "1d");
 
-      stock->range = strdup("1d");
-
-      grid_stock_update(head);
       return true;
 
-    case 'y':
-      free(stock->range);
+    case 'w':
+      grid_stock_update(head, "1wk");
 
-      stock->range = strdup("1y");
-
-      grid_stock_update(head);
       return true;
 
     case 'm':
-      free(stock->range);
+      grid_stock_update(head, "1mo");
 
-      stock->range = strdup("1mo");
+      return true;
 
-      grid_stock_update(head);
+    case 'y':
+      grid_stock_update(head, "1y");
+
+      return true;
+
+    case 'x':
+      grid_stock_update(head, "max");
+
       return true;
 
     default:
@@ -774,9 +813,9 @@ int main(int argc, char* argv[])
     .rect = TUI_RECT_NONE,
     .border = (tui_border_t)
     {
-      .is_active = true,
+      .is_active = false,
     },
-    .has_padding = true,
+    .has_padding = false,
     .event.key = &panel_window_key,
     .event.enter = &panel_window_enter,
     .align = TUI_ALIGN_BETWEEN,
@@ -786,6 +825,7 @@ int main(int argc, char* argv[])
     .event.free = &panel_window_free,
   });
 
+  /*
   tui_window_parent_t* left = tui_parent_child_parent_create(panel, (tui_window_parent_config_t)
   {
     .color = (tui_color_t)
@@ -811,6 +851,7 @@ int main(int argc, char* argv[])
     .event.enter = &side_text_enter,
     .event.exit = &side_text_exit,
   });
+  */
 
   /*
   tui_window_parent_t* middle = tui_parent_child_parent_create(panel, (tui_window_parent_config_t)
@@ -826,6 +867,39 @@ int main(int argc, char* argv[])
     .pos = TUI_POS_CENTER,
     .align = TUI_ALIGN_CENTER,
   });
+  char* left_strings[] =
+  {
+    "banana",
+    "ba\033[42ml\033[33mlon\033[0mg",
+    "|\n\033[42m\033[32m|\033[0m\n|",
+    "segel"
+  };
+
+  for (size_t index = 0; index < 4; index++)
+  {
+    tui_parent_child_text_create(left, (tui_window_text_config_t)
+    {
+      .string = left_strings[index],
+      .rect = TUI_RECT_NONE,
+      .event.enter = &side_item_enter,
+      .event.exit = &side_item_exit,
+    });
+  }
+
+  side_data_t* left_data = malloc(sizeof(side_data_t));
+
+  left_data->input = tui_input_create(tui, 100, left_text);
+
+  left_text->head.data = left_data->input;
+
+  left_data->list = tui_list_create(tui, left->is_vertical);
+
+  for (size_t index = 0; index < left->child_count; index++)
+  {
+    tui_list_item_add(left_data->list, left->children[index]);
+  }
+
+  left->head.data = left_data;
   */
 
   tui_window_parent_t* root2 = tui_parent_child_parent_create(panel, (tui_window_parent_config_t)
@@ -871,48 +945,6 @@ int main(int argc, char* argv[])
 
     value_window->string = grid_data->string;
   }
-
-  char* left_strings[] =
-  {
-    "banana",
-    "ba\033[42ml\033[33mlon\033[0mg",
-    "|\n\033[42m\033[32m|\033[0m\n|",
-    "segel"
-  };
-
-  for (size_t index = 0; index < 4; index++)
-  {
-    tui_parent_child_text_create(left, (tui_window_text_config_t)
-    {
-      .string = left_strings[index],
-      .rect = TUI_RECT_NONE,
-      .event.enter = &side_item_enter,
-      .event.exit = &side_item_exit,
-    });
-
-    /*
-    tui_parent_child_text_create(middle, (tui_window_text_config_t)
-    {
-      .string = left_strings[index],
-      .rect = TUI_RECT_NONE,
-    });
-    */
-  }
-
-  side_data_t* left_data = malloc(sizeof(side_data_t));
-
-  left_data->input = tui_input_create(tui, 100, left_text);
-
-  left_text->head.data = left_data->input;
-
-  left_data->list = tui_list_create(tui, left->is_vertical);
-
-  for (size_t index = 0; index < left->child_count; index++)
-  {
-    tui_list_item_add(left_data->list, left->children[index]);
-  }
-
-  left->head.data = left_data;
 
 
   /*
@@ -1000,7 +1032,7 @@ int main(int argc, char* argv[])
 
   tui_list_t* list = tui_list_create(tui, panel->is_vertical);
 
-  tui_list_item_add(list, (tui_window_t*) left);
+  // tui_list_item_add(list, (tui_window_t*) left);
 
   tui_list_item_add(list, (tui_window_t*) grid);
 
