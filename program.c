@@ -390,6 +390,70 @@ void grid_window_min_max_calc(tui_window_t* head)
 /*
  *
  */
+void grid_window_cursor_contain(tui_window_t* head)
+{
+  grid_data_t* data = head->data;
+
+  tui_grid_t* grid = data->grid;
+
+  if (grid->x < 0)
+  {
+    grid->x = 0;
+  }
+  else if (grid->x >= head->_rect.w)
+  {
+    grid->x = head->_rect.w - 1;
+  }
+
+  if (grid->y < 0)
+  {
+    grid->y = 0;
+  }
+  else if (grid->y >= head->_rect.h)
+  {
+    grid->y = head->_rect.h - 1;
+  }
+}
+
+/*
+ *
+ */
+void grid_window_cursor_render(tui_window_t* head)
+{
+  tui_window_grid_t* window = (tui_window_grid_t*) head;
+  
+  grid_data_t* data = head->data;
+
+  tui_grid_t* grid = data->grid;
+
+  grid_window_cursor_contain(head);
+
+  tui_cursor_set(head->tui, head->_rect.x + grid->x, head->_rect.y + grid->y);
+
+  for (int y = 0; y < head->_rect.h; y++)
+  {
+    tui_window_grid_square_t* square = tui_window_grid_square_get(window, grid->x, y);
+
+    square->symbol = '|';
+    square->color.fg = TUI_COLOR_WHITE;
+  }
+
+  for (int x = 0; x < head->_rect.w; x++)
+  {
+    tui_window_grid_square_t* square = tui_window_grid_square_get(window, x, grid->y);
+
+    square->symbol = '-';
+    square->color.fg = TUI_COLOR_WHITE;
+  }
+
+  tui_window_grid_square_t* square = tui_window_grid_square_get(window, grid->x, grid->y);
+
+  square->symbol = ' ';
+}
+
+/*
+ *
+ */
 void grid_window_render2(tui_window_t* head)
 {
   // info_print("Grid render: w:%d h:%d", head->_rect.w, head->_rect.h);
@@ -401,7 +465,6 @@ void grid_window_render2(tui_window_t* head)
   if (!data) return;
 
   stock_t* stock = data->stock;
-  tui_grid_t* grid = data->grid;
 
   tui_size_t size = { .w = head->_rect.w, .h = head->_rect.h };
 
@@ -462,7 +525,7 @@ void grid_window_render2(tui_window_t* head)
 
   if (head->tui->window == head)
   {
-    tui_cursor_set(head->tui, head->_rect.x + grid->x, head->_rect.y + grid->y);
+    grid_window_cursor_render(head);
   }
 }
 
@@ -480,7 +543,6 @@ void grid_window_render(tui_window_t* head)
   if (!data) return;
 
   stock_t* stock = data->stock;
-  tui_grid_t* grid = data->grid;
 
   tui_size_t size = { .w = head->_rect.w, .h = head->_rect.h };
 
@@ -565,7 +627,7 @@ void grid_window_render(tui_window_t* head)
 
   if (head->tui->window == head)
   {
-    tui_cursor_set(head->tui, head->_rect.x + grid->x, head->_rect.y + grid->y);
+    grid_window_cursor_render(head);
   }
 }
 

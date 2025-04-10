@@ -2427,15 +2427,29 @@ tui_window_grid_t* tui_parent_child_grid_create(tui_window_parent_t* parent, tui
  */
 void tui_window_grid_square_set(tui_window_grid_t* window, int x, int y, tui_window_grid_square_t square)
 {
-  if (x < 0 || x >= window->_size.w ||
-      y < 0 || y >= window->_size.h)
+  if (x >= 0 && x < window->_size.w &&
+      y >= 0 && y < window->_size.h)
   {
-    return;
+    int index = y * window->_size.w + x;
+
+    window->grid[index] = square;
+  }
+}
+
+/*
+ * Get square at x y in grid window
+ */
+tui_window_grid_square_t* tui_window_grid_square_get(tui_window_grid_t* window, int x, int y)
+{
+  if (x >= 0 && x < window->_size.w &&
+      y >= 0 && y < window->_size.h)
+  {
+    int index = y * window->_size.w + x;
+
+    return &window->grid[index];
   }
 
-  int index = y * window->_size.w + x;
-
-  window->grid[index] = square;
+  return NULL;
 }
 
 /*
