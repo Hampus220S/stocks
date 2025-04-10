@@ -1,8 +1,11 @@
 # Notes
 - fix flickering screen
-- create candlestick chart
-- create line chart (timestamp and close values)
 - remove specific window_ _create functions and make it more generic.
+- remove tui_grid_t
+- in chart, follow close price and render vertical line
+- 'm' for month, 'd' for day, 'y' for year
+- create stock_merge(stock, count) to merge values into each other
+- remove STOCK_INTERVALS and STOCK_RANGES
 
 ## Maybe
 - Remove rect argument and use child->_rect instead

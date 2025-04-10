@@ -31,6 +31,7 @@
 #define KEY_ENTR  10
 #define KEY_TAB    9
 #define KEY_RTAB 353
+#define KEY_SPACE 32
 
 #define TUI_PARENT_SIZE 0
 
@@ -2260,6 +2261,8 @@ tui_window_parent_t* tui_parent_child_parent_create(tui_window_parent_t* parent,
 
   child->head.parent = parent;
 
+  child->head.menu = parent->head.menu;
+
   if (tui_windows_window_append(&parent->children, &parent->child_count, (tui_window_t*) child) != 0)
   {
     tui_window_parent_free(&child);
@@ -2330,6 +2333,8 @@ tui_window_text_t* tui_parent_child_text_create(tui_window_parent_t* parent, tui
 
   child->head.parent = parent;
 
+  child->head.menu = parent->head.menu;
+
   if (tui_windows_window_append(&parent->children, &parent->child_count, (tui_window_t*) child) != 0)
   {
     tui_window_text_free(&child);
@@ -2399,6 +2404,8 @@ tui_window_grid_t* tui_parent_child_grid_create(tui_window_parent_t* parent, tui
   }
 
   child->head.parent = parent;
+
+  child->head.menu = parent->head.menu;
 
   if (child->head.event.init)
   {

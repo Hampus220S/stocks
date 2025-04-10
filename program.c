@@ -163,7 +163,7 @@ static inline double grid_stock_value_get(double max, double min, int h, int y)
 
 const char* STOCK_RANGES[]    = { "1d", "5d", "1mo", "3mo", "6mo", "1y", "2y" };
 
-const char* STOCK_INTERVALS[] = { "5m", "30m", "90m", "4h", "1d", "5d", "1wk" };
+const char* STOCK_INTERVALS[] = { "5m", "30m", "90m", "4h", "1d", "1d", "1wk" };
 
 
 #define STOCK_RANGE_COUNT (sizeof(STOCK_RANGES) / sizeof(char*))
@@ -231,9 +231,24 @@ static ssize_t stock_interval_index_get(const char* interval)
 /*
  *
  */
+typedef struct grid_data_t
+{
+  tui_grid_t*        grid;
+  stock_t*           stock;
+  double             _min;
+  double             _max;
+  char*              string;
+  tui_window_text_t* window;
+} grid_data_t;
+
+/*
+ *
+ */
 static void grid_stock_update(tui_window_t* window)
 {
-  stock_t* stock = window->data;
+  grid_data_t* data = window->data;
+
+  stock_t* stock = data->stock;
 
   ssize_t index = stock_range_index_get(stock->range);
 
@@ -255,22 +270,9 @@ static void grid_stock_update(tui_window_t* window)
   {
     stock_free(&stock);
 
-    window->data = new_stock;
+    data->stock = new_stock;
   }
 }
-
-/*
- *
- */
-typedef struct grid_data_t
-{
-  tui_grid_t*        grid;
-  stock_t*           stock;
-  double             _min;
-  double             _max;
-  char*              string;
-  tui_window_text_t* window;
-} grid_data_t;
 
 /*
  *
@@ -298,11 +300,18 @@ void grid_window_string_update(tui_window_t* head)
 
   if (index < stock->value_count)
   {
-    int time = stock->values[index].time;
+    int time = stock->values[stock->value_count - index - 1].time;
 
     double value = grid_stock_value_get(data->_max, data->_min, head->_rect.h, grid->y);
 
-    if (sprintf(data->string, "[(%d, %f)]", time, value) < 0)
+    time_t raw_time = (time_t) time;
+
+    struct tm *timeinfo = localtime(&raw_time);
+
+    char buffer[80];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
+
+    if (sprintf(data->string, "[(%s, %.2f)]", buffer, value) < 0)
     {
       info_print("Failed to sprintf");
     }
@@ -326,7 +335,7 @@ void grid_window_init(tui_window_t* head)
 
   head->data = data;
 
-  data->stock = stock_get("TSLA", "3mo", "4h");
+  data->stock = stock_get("TSLA", "6mo", "4h");
 
   data->string = malloc(sizeof(char) * 100);
 
@@ -352,30 +361,6 @@ void grid_window_free(tui_window_t* head)
 
     free(data);
   }
-}
-
-/*
- *
- */
-bool grid_window_key(tui_window_t* head, int key)
-{
-  grid_data_t* data = head->data;
-
-  if (!data)
-  {
-    return false;
-  }
-
-  tui_grid_t* grid = data->grid;
-
-  if (grid && tui_grid_event(grid, key))
-  {
-    grid_window_string_update(head);
-
-    return true;
-  }
-
-  return false;
 }
 
 void grid_window_min_max_calc(tui_window_t* head)
@@ -405,13 +390,87 @@ void grid_window_min_max_calc(tui_window_t* head)
 /*
  *
  */
+void grid_window_render2(tui_window_t* head)
+{
+  info_print("Grid render: w:%d h:%d", head->_rect.w, head->_rect.h);
+  
+  tui_window_grid_t* window = (tui_window_grid_t*) head;
+  
+  grid_data_t* data = head->data;
+
+  if (!data) return;
+
+  stock_t* stock = data->stock;
+  tui_grid_t* grid = data->grid;
+
+  tui_size_t size = { .w = head->_rect.w, .h = head->_rect.h };
+
+  if (tui_window_grid_resize(window, size) != 0)
+  {
+    error_print("tui_window_grid_resize");
+  }
+
+  grid_window_min_max_calc(head);
+
+  int count = (float) head->_rect.w / 2.f;
+
+  int first_index = MAX(0, stock->value_count - count - 1);
+
+  double first_value = stock->values[first_index].close;
+
+  double last_value = stock->values[stock->value_count - 1].close;
+
+  short color = (first_value > last_value) ? TUI_COLOR_RED : TUI_COLOR_GREEN;
+
+  for (int index = 0; index < count; index++)
+  {
+    if (index >= stock->value_count) break;
+
+    int x = (head->_rect.w - (index * 2));
+
+    stock_value_t value = stock->values[stock->value_count - 1 - index];
+
+    int y = grid_stock_y_get(data->_max, data->_min, head->_rect.h, value.close);
+
+    tui_window_grid_square_set(window, x, y, (tui_window_grid_square_t)
+    {
+      .color.bg = color,
+    });
+
+    if (index + 1 >= stock->value_count) break;
+
+    x--;
+
+    stock_value_t next_value = stock->values[stock->value_count - 2 - index];
+
+    int next_y = grid_stock_y_get(data->_max, data->_min, head->_rect.h, next_value.close);
+
+    int upper = MIN(y, next_y);
+    int lower = MAX(y, next_y);
+
+    for (y = upper; y < lower; y++)
+    {
+      tui_window_grid_square_set(window, x, y, (tui_window_grid_square_t)
+      {
+        .color.bg = color,
+      });
+    }
+  }
+
+  if (head->tui->window == head)
+  {
+    tui_cursor_set(head->tui, head->_rect.x + grid->x, head->_rect.y + grid->y);
+  }
+}
+
+/*
+ *
+ */
 void grid_window_render(tui_window_t* head)
 {
   info_print("Grid render: w:%d h:%d", head->_rect.w, head->_rect.h);
   
   tui_window_grid_t* window = (tui_window_grid_t*) head;
-
-  // grid_stock_update(head);
   
   grid_data_t* data = head->data;
 
@@ -502,6 +561,72 @@ void grid_window_render(tui_window_t* head)
   {
     tui_cursor_set(head->tui, head->_rect.x + grid->x, head->_rect.y + grid->y);
   }
+}
+
+/*
+ *
+ */
+bool grid_window_key(tui_window_t* head, int key)
+{
+  grid_data_t* data = head->data;
+
+  if (!data)
+  {
+    return false;
+  }
+
+  stock_t* stock = data->stock;
+  tui_grid_t* grid = data->grid;
+
+  if (grid && tui_grid_event(grid, key))
+  {
+    grid_window_string_update(head);
+
+    return true;
+  }
+
+  switch (key)
+  {
+    case KEY_SPACE:
+      if (head->event.render == &grid_window_render)
+      {
+        head->event.render = &grid_window_render2;
+      }
+      else
+      {
+        head->event.render = &grid_window_render;
+      }
+      return true;
+
+    case 'd':
+      free(stock->range);
+
+      stock->range = strdup("1d");
+
+      grid_stock_update(head);
+      return true;
+
+    case 'y':
+      free(stock->range);
+
+      stock->range = strdup("1y");
+
+      grid_stock_update(head);
+      return true;
+
+    case 'm':
+      free(stock->range);
+
+      stock->range = strdup("1mo");
+
+      grid_stock_update(head);
+      return true;
+
+    default:
+      break;
+  }
+
+  return false;
 }
 
 /*
@@ -619,6 +744,7 @@ int main(int argc, char* argv[])
     .event.exit = &side_text_exit,
   });
 
+  /*
   tui_window_parent_t* middle = tui_parent_child_parent_create(panel, (tui_window_parent_config_t)
   {
     .color = (tui_color_t)
@@ -632,10 +758,11 @@ int main(int argc, char* argv[])
     .pos = TUI_POS_CENTER,
     .align = TUI_ALIGN_CENTER,
   });
+  */
 
-  tui_window_parent_t* root2 = tui_window_parent_create(tui, (tui_window_parent_config_t)
+  tui_window_parent_t* root2 = tui_parent_child_parent_create(panel, (tui_window_parent_config_t)
   {
-    .rect = { 0 },
+    .rect = TUI_RECT_NONE,
     .align = TUI_ALIGN_CENTER,
     .pos = TUI_POS_CENTER,
     .is_inflated = true,
@@ -653,7 +780,7 @@ int main(int argc, char* argv[])
       .w = 20,
       .h = 10,
     },
-    .event.render = &grid_window_render,
+    .event.render = &grid_window_render2,
     .event.key = &grid_window_key,
     .event.init = &grid_window_init,
     .event.free = &grid_window_free,
@@ -695,11 +822,13 @@ int main(int argc, char* argv[])
       .event.exit = &side_item_exit,
     });
 
+    /*
     tui_parent_child_text_create(middle, (tui_window_text_config_t)
     {
       .string = left_strings[index],
       .rect = TUI_RECT_NONE,
     });
+    */
   }
 
   side_data_t* left_data = malloc(sizeof(side_data_t));
@@ -718,6 +847,7 @@ int main(int argc, char* argv[])
   left->head.data = left_data;
 
 
+  /*
   tui_window_parent_t* right = tui_parent_child_parent_create(panel, (tui_window_parent_config_t)
   {
     .color = (tui_color_t)
@@ -797,13 +927,14 @@ int main(int argc, char* argv[])
   }
 
   right->head.data = right_data;
+  */
 
 
   tui_list_t* list = tui_list_create(tui, panel->is_vertical);
 
   tui_list_item_add(list, (tui_window_t*) left);
 
-  tui_list_item_add(list, (tui_window_t*) right);
+  tui_list_item_add(list, (tui_window_t*) grid);
 
   panel->head.data = list;
 
