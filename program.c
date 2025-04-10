@@ -161,9 +161,9 @@ static inline double grid_stock_value_get(double max, double min, int h, int y)
   return ((double) (h - y) / (double) h) * (max - min) + min;
 }
 
-const char* STOCK_RANGES[]    = { "1d", "5d", "1mo", "3mo", "6mo", "1y", "2y" };
+const char* STOCK_RANGES[]    = { "1d", "5d", "1mo", "3mo", "6mo", "1y" };
 
-const char* STOCK_INTERVALS[] = { "5m", "30m", "90m", "4h", "1d", "1d", "1wk" };
+const char* STOCK_INTERVALS[] = { "1m", "5m", "30m", "1h", "1h", "1h" };
 
 
 #define STOCK_RANGE_COUNT (sizeof(STOCK_RANGES) / sizeof(char*))
@@ -298,9 +298,9 @@ void grid_window_string_update(tui_window_t* head)
 
   int index = (head->_rect.w - grid->x) / 2;
 
-  if (index < stock->value_count)
+  if (index < stock->_value_count)
   {
-    int time = stock->values[stock->value_count - index - 1].time;
+    int time = stock->_values[stock->_value_count - index - 1].time;
 
     double value = grid_stock_value_get(data->_max, data->_min, head->_rect.h, grid->y);
 
@@ -369,7 +369,7 @@ void grid_window_min_max_calc(tui_window_t* head)
 
   stock_t* stock = data->stock;
 
-  stock_value_t value = stock->values[stock->value_count - 1];
+  stock_value_t value = stock->_values[stock->_value_count - 1];
 
   data->_max = value.high;
   data->_min = value.low;
@@ -378,9 +378,9 @@ void grid_window_min_max_calc(tui_window_t* head)
 
   for (int index = 1; index < count; index++)
   {
-    if (index >= stock->value_count) break;
+    if (index >= stock->_value_count) break;
 
-    stock_value_t value = stock->values[stock->value_count - 1 - index];
+    stock_value_t value = stock->_values[stock->_value_count - 1 - index];
 
     data->_max = MAX(data->_max, value.high);
     data->_min = MIN(data->_min, value.low);
@@ -392,7 +392,7 @@ void grid_window_min_max_calc(tui_window_t* head)
  */
 void grid_window_render2(tui_window_t* head)
 {
-  info_print("Grid render: w:%d h:%d", head->_rect.w, head->_rect.h);
+  // info_print("Grid render: w:%d h:%d", head->_rect.w, head->_rect.h);
   
   tui_window_grid_t* window = (tui_window_grid_t*) head;
   
@@ -410,25 +410,28 @@ void grid_window_render2(tui_window_t* head)
     error_print("tui_window_grid_resize");
   }
 
+  // Limit stock to window size
+  stock_resize(data->stock, head->_rect.w / 2);
+
   grid_window_min_max_calc(head);
 
   int count = (float) head->_rect.w / 2.f;
 
-  int first_index = MAX(0, stock->value_count - count - 1);
+  int first_index = MAX(0, (int) stock->_value_count - count - 1);
 
-  double first_value = stock->values[first_index].close;
+  double first_value = stock->_values[first_index].close;
 
-  double last_value = stock->values[stock->value_count - 1].close;
+  double last_value = stock->_values[stock->_value_count - 1].close;
 
   short color = (first_value > last_value) ? TUI_COLOR_RED : TUI_COLOR_GREEN;
 
   for (int index = 0; index < count; index++)
   {
-    if (index >= stock->value_count) break;
+    if (index >= stock->_value_count) break;
 
     int x = (head->_rect.w - (index * 2));
 
-    stock_value_t value = stock->values[stock->value_count - 1 - index];
+    stock_value_t value = stock->_values[stock->_value_count - 1 - index];
 
     int y = grid_stock_y_get(data->_max, data->_min, head->_rect.h, value.close);
 
@@ -437,11 +440,11 @@ void grid_window_render2(tui_window_t* head)
       .color.bg = color,
     });
 
-    if (index + 1 >= stock->value_count) break;
+    if (index + 1 >= stock->_value_count) break;
 
     x--;
 
-    stock_value_t next_value = stock->values[stock->value_count - 2 - index];
+    stock_value_t next_value = stock->_values[stock->_value_count - 2 - index];
 
     int next_y = grid_stock_y_get(data->_max, data->_min, head->_rect.h, next_value.close);
 
@@ -468,7 +471,7 @@ void grid_window_render2(tui_window_t* head)
  */
 void grid_window_render(tui_window_t* head)
 {
-  info_print("Grid render: w:%d h:%d", head->_rect.w, head->_rect.h);
+  // info_print("Grid render: w:%d h:%d", head->_rect.w, head->_rect.h);
   
   tui_window_grid_t* window = (tui_window_grid_t*) head;
   
@@ -486,6 +489,9 @@ void grid_window_render(tui_window_t* head)
     error_print("tui_window_grid_resize");
   }
 
+  // Limit stock to window size
+  stock_resize(data->stock, head->_rect.w / 2);
+
   grid_window_min_max_calc(head);
 
   /*
@@ -499,11 +505,11 @@ void grid_window_render(tui_window_t* head)
 
   for (int index = 0; index < count; index++)
   {
-    if (index >= stock->value_count) break;
+    if (index >= stock->_value_count) break;
 
     int x = (head->_rect.w - (index * 2));
 
-    stock_value_t value = stock->values[stock->value_count - 1 - index];
+    stock_value_t value = stock->_values[stock->_value_count - 1 - index];
 
     int close = grid_stock_y_get(data->_max, data->_min, head->_rect.h, value.close);
 

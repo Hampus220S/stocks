@@ -32,10 +32,12 @@ typedef struct stock_t
   char*          range;
   char*          interval;
   char*          currency;
-  stock_value_t* values;
-  size_t         value_count;
   double         high;
   double         low;
+  stock_value_t* values;
+  size_t         value_count;
+  stock_value_t* _values;
+  size_t         _value_count;
 } stock_t;
 
 /*
@@ -52,6 +54,64 @@ extern void     stock_free(stock_t** stock);
 
 #include <curl/curl.h>
 #include <json-c/json.h>
+
+/*
+ * Resize stock values and store them in _values
+ */
+int stock_resize(stock_t* stock, size_t count)
+{
+  if (count > stock->value_count)
+  {
+    return 1;
+  }
+
+  size_t group_size = stock->value_count / count;
+
+  size_t spill = stock->value_count - count * group_size;
+
+  stock_value_t* values = malloc(sizeof(stock_value_t) * count);
+
+  size_t value_index = 0;
+  
+  for (size_t group_index = 0; group_index < count; group_index++)
+  {
+    // Get first value of group
+    stock_value_t group_value = stock->values[value_index++];
+
+    size_t curr_size = (group_index < spill) ? group_size + 1 : group_size;
+
+    // Merge middle values of group
+    for (size_t index = 1; index < (curr_size - 1); index++)
+    {
+      stock_value_t value = stock->values[value_index++];
+
+      group_value.high = MAX(group_value.high, value.high);
+      group_value.low  = MIN(group_value.low,  value.low);
+    }
+  
+    // Merge last value of group
+    if (curr_size > 1)
+    {
+      stock_value_t value = stock->values[value_index++];
+
+      group_value.close = value.close;
+      group_value.time  = value.time;
+
+      group_value.high = MAX(group_value.high, value.high);
+      group_value.low  = MIN(group_value.low,  value.low);
+    }
+
+    values[group_index] = group_value;
+  }
+
+  free(stock->_values);
+
+  stock->_values = values;
+
+  stock->_value_count = count;
+
+  return 0;
+}
 
 /*
  * Function for curl to write response
@@ -480,6 +540,8 @@ stock_t* stock_get(char* symbol, char* range, char* interval)
   }
 
   json_object_put(json);
+
+  stock_resize(stock, stock->value_count);
 
   if (stock->value_count > 0)
   {
