@@ -1,7 +1,6 @@
 # Notes
 - fix flickering screen
 - remove specific window_ _create functions and make it more generic.
-- remove tui_grid_t
 - in chart, follow close price and render vertical line
 - grid_data_t _min and _max will be stock.high stock.low if the whole graph is visable
   then, remove _min and _max.

@@ -232,7 +232,6 @@ static ssize_t stock_interval_index_get(const char* interval)
  */
 typedef struct grid_data_t
 {
-  tui_grid_t*        grid;
   stock_t*           stock;
   int                value_index;
   double             _min;
@@ -281,6 +280,8 @@ static void grid_stock_update(tui_window_t* window, char* range)
  */
 void grid_window_string_update(tui_window_t* head)
 {
+  info_print("grid_window_string_update");
+
   grid_data_t* data = head->data;
 
   if (!data->string) return;
@@ -290,30 +291,23 @@ void grid_window_string_update(tui_window_t* head)
 
   stock_t* stock = data->stock;
 
-  tui_grid_t* grid = data->grid;
-
-  if (!stock || !grid)
+  if (!stock)
   {
     return;
   }
 
-
-  int index = (head->_rect.w - grid->x) / 2;
-
-  if (index < stock->_value_count)
+  if (data->value_index < stock->_value_count)
   {
-    int time = stock->_values[stock->_value_count - index - 1].time;
+    stock_value_t value = stock->_values[stock->_value_count - data->value_index - 1];
 
-    double value = grid_stock_value_get(data->_max, data->_min, head->_rect.h, grid->y);
-
-    time_t raw_time = (time_t) time;
+    time_t raw_time = (time_t) value.time;
 
     struct tm *timeinfo = localtime(&raw_time);
 
     char buffer[80];
     strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
 
-    if (sprintf(data->string, "[(%s, %.2f)]", buffer, value) < 0)
+    if (sprintf(data->string, "[(%s, %.2f)]", buffer, value.close) < 0)
     {
       info_print("Failed to sprintf");
     }
@@ -341,8 +335,6 @@ void grid_window_init(tui_window_t* head)
 
   data->string = malloc(sizeof(char) * 100);
 
-  data->grid = tui_grid_create(head->tui, window);
-
   grid_window_string_update(head);
 }
 
@@ -356,8 +348,6 @@ void grid_window_free(tui_window_t* head)
   if (data)
   {
     stock_free(&data->stock);
-
-    tui_grid_delete(&data->grid);
 
     free(data->string);
 
@@ -392,34 +382,6 @@ void grid_window_min_max_calc(tui_window_t* head)
 /*
  *
  */
-void grid_window_cursor_contain(tui_window_t* head)
-{
-  grid_data_t* data = head->data;
-
-  tui_grid_t* grid = data->grid;
-
-  if (grid->x < 0)
-  {
-    grid->x = 0;
-  }
-  else if (grid->x >= head->_rect.w)
-  {
-    grid->x = head->_rect.w - 1;
-  }
-
-  if (grid->y < 0)
-  {
-    grid->y = 0;
-  }
-  else if (grid->y >= head->_rect.h)
-  {
-    grid->y = head->_rect.h - 1;
-  }
-}
-
-/*
- *
- */
 void grid_window_cursor_render(tui_window_t* head)
 {
   tui_window_grid_t* window = (tui_window_grid_t*) head;
@@ -427,12 +389,6 @@ void grid_window_cursor_render(tui_window_t* head)
   grid_data_t* data = head->data;
 
   stock_t* stock = data->stock;
-
-  /*
-  tui_grid_t* grid = data->grid;
-
-  grid_window_cursor_contain(head);
-  */
 
   int cursor_x = MAX(0, head->_rect.w - 1 - (int) data->value_index * 2);
 
@@ -539,6 +495,8 @@ void grid_window_render2(tui_window_t* head)
   {
     grid_window_cursor_render(head);
   }
+
+  grid_window_string_update(head);
 }
 
 /*
@@ -641,6 +599,8 @@ void grid_window_render(tui_window_t* head)
   {
     grid_window_cursor_render(head);
   }
+
+  grid_window_string_update(head);
 }
 
 /*
@@ -656,16 +616,6 @@ bool grid_window_key(tui_window_t* head, int key)
   }
 
   stock_t* stock = data->stock;
-  tui_grid_t* grid = data->grid;
-
-  /*
-  if (grid && tui_grid_event(grid, key))
-  {
-    grid_window_string_update(head);
-
-    return true;
-  }
-  */
 
   switch (key)
   {
