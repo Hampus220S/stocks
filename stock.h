@@ -16,6 +16,7 @@
 typedef struct stock_value_t
 {
   int    time;
+  int    volume;
   double high;
   double low;
   double close;
@@ -29,22 +30,31 @@ typedef struct stock_t
 {
   char*          symbol;
   char*          name;
+  char*          exchange;
   char*          range;
   char*          interval;
   char*          currency;
+  int            volume;
   double         high;
   double         low;
   stock_value_t* values;
   size_t         value_count;
   stock_value_t* _values;
   size_t         _value_count;
+  double         _open;
+  double         _high;
+  double         _low;
 } stock_t;
 
 /*
  * Function declarations
  */
 
-extern stock_t* stock_get(char* symbol, char* range, char* interval);
+extern stock_t* stock_create(char* symbol, char* range);
+
+extern int      stock_zoom(stock_t* stock, char* range);
+
+extern int      stock_resize(stock_t* stock, size_t count);
 
 extern void     stock_free(stock_t** stock);
 
@@ -54,6 +64,115 @@ extern void     stock_free(stock_t** stock);
 
 #include <curl/curl.h>
 #include <json-c/json.h>
+
+/*
+ * Stock ranges and corresponding intervals
+ */
+
+const char* STOCK_RANGES[]    = { "1d", "1wk", "1mo", "1y", "max" };
+
+const char* STOCK_INTERVALS[] = { "1m", "15m", "30m", "1h", "1d" };
+
+#define STOCK_RANGE_COUNT    (sizeof(STOCK_RANGES)    / sizeof(char*))
+
+#define STOCK_INTERVAL_COUNT (sizeof(STOCK_INTERVALS) / sizeof(char*))
+
+/*
+ * Get stock range string of index
+ */
+static inline const char* stock_range_get(size_t index)
+{
+  if (index >= 0 && index < STOCK_RANGE_COUNT)
+  {
+    return STOCK_RANGES[index];
+  }
+
+  return NULL;
+}
+
+/*
+ * Get index of stock range string
+ */
+static inline ssize_t stock_range_index_get(const char* range)
+{
+  for (ssize_t index = 0; index < STOCK_RANGE_COUNT; index++)
+  {
+    if (strcmp(STOCK_RANGES[index], range) == 0)
+    {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+/*
+ * Get stock interval string of index
+ */
+static inline const char* stock_interval_get(size_t index)
+{
+  if (index >= 0 && index < STOCK_INTERVAL_COUNT)
+  {
+    return STOCK_INTERVALS[index];
+  }
+
+  return NULL;
+}
+
+/*
+ * Get index of stock interval string
+ */
+static ssize_t stock_interval_index_get(const char* interval)
+{
+  for (ssize_t index = 0; index < STOCK_INTERVAL_COUNT; index++)
+  {
+    if (strcmp(STOCK_INTERVALS[index], interval) == 0)
+    {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+/*
+ * Get interval that corresponds to range
+ */
+static inline const char* stock_range_interval_get(const char* range)
+{
+  ssize_t index = stock_range_index_get(range);
+
+  if (index == -1)
+  {
+    return NULL;
+  }
+  
+  return stock_interval_get(index);
+}
+
+/*
+ * Calculate stock _open, _high and _low values
+ */
+static inline void stock_meta_calc(stock_t* stock)
+{
+  if (stock->_value_count > 0)
+  {
+    stock_value_t value = stock->_values[0];
+
+    stock->_open = value.open;
+
+    stock->_high = value.high;
+    stock->_low  = value.low;
+
+    for (size_t index = 1; index < stock->_value_count; index++)
+    {
+      value = stock->_values[index];
+
+      stock->_high = MAX(stock->_high, value.high);
+      stock->_low  = MIN(stock->_low,  value.low);
+    }
+  }
+}
 
 /*
  * Resize stock values and store them in _values
@@ -70,6 +189,11 @@ int stock_resize(stock_t* stock, size_t count)
   size_t spill = stock->value_count - count * group_size;
 
   stock_value_t* values = malloc(sizeof(stock_value_t) * count);
+
+  if (!values)
+  {
+    return 2;
+  }
 
   size_t value_index = 0;
   
@@ -94,8 +218,9 @@ int stock_resize(stock_t* stock, size_t count)
     {
       stock_value_t value = stock->values[value_index++];
 
-      group_value.close = value.close;
-      group_value.time  = value.time;
+      group_value.close  = value.close;
+      group_value.time   = value.time;
+      group_value.volume = value.volume;
 
       group_value.high = MAX(group_value.high, value.high);
       group_value.low  = MIN(group_value.low,  value.low);
@@ -109,6 +234,8 @@ int stock_resize(stock_t* stock, size_t count)
   stock->_values = values;
 
   stock->_value_count = count;
+
+  stock_meta_calc(stock);
 
   return 0;
 }
@@ -254,17 +381,6 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
     return 1;
   }
 
-  struct json_object* symbol = json_object_object_get(meta, "symbol");
-
-  if (!symbol || !json_object_is_type(symbol, json_type_string))
-  {
-    error_print("Missing 'symbol' field");
-
-    return 2;
-  }
-
-  stock->symbol = strdup(json_object_get_string(symbol));
-
 
   struct json_object* currency = json_object_object_get(meta, "currency");
 
@@ -290,16 +406,52 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
   stock->name = strdup(json_object_get_string(name));
 
 
-  struct json_object* range = json_object_object_get(meta, "range");
+  struct json_object* exchange = json_object_object_get(meta, "fullExchangeName");
 
-  if (!range || !json_object_is_type(range, json_type_string))
+  if (!exchange || !json_object_is_type(exchange, json_type_string))
   {
-    error_print("Missing 'range' field");
+    error_print("Missing 'fullExchangeName' field");
 
     return 5;
   }
 
-  stock->range = strdup(json_object_get_string(range));
+  stock->exchange = strdup(json_object_get_string(exchange));
+
+
+  struct json_object* high = json_object_object_get(meta, "regularMarketDayHigh");
+
+  if (!high || !json_object_is_type(high, json_type_double))
+  {
+    error_print("Missing 'high' field");
+
+    return 5;
+  }
+
+  stock->high = json_object_get_double(high);
+
+
+  struct json_object* low = json_object_object_get(meta, "regularMarketDayLow");
+
+  if (!low || !json_object_is_type(low, json_type_double))
+  {
+    error_print("Missing 'low' field");
+
+    return 5;
+  }
+
+  stock->low = json_object_get_double(low);
+
+
+  struct json_object* volume = json_object_object_get(meta, "regularMarketVolume");
+
+  if (!volume || !json_object_is_type(volume, json_type_int))
+  {
+    error_print("Missing 'volume' field");
+
+    return 5;
+  }
+
+  stock->volume = json_object_get_int(volume);
 
   return 0;
 }
@@ -307,19 +459,27 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
 /*
  * Parse json objects for stock value
  */
-static inline int stock_value_parse(stock_value_t* value, struct json_object* timestamp, struct json_object* open, struct json_object* close, struct json_object* high, struct json_object* low)
+static inline int stock_value_parse(stock_value_t* value, struct json_object* time, struct json_object* volume, struct json_object* open, struct json_object* close, struct json_object* high, struct json_object* low)
 {
-  if (!timestamp || !json_object_is_type(timestamp, json_type_int))
+  if (!time || !json_object_is_type(time, json_type_int))
   {
     return 1;
   }
 
-  value->time = json_object_get_int(timestamp);
+  value->time = json_object_get_int(time);
+
+
+  if (!volume || !json_object_is_type(volume, json_type_int))
+  {
+    return 2;
+  }
+
+  value->volume = json_object_get_int(volume);
 
 
   if (!open || !json_object_is_type(open, json_type_double))
   {
-    return 2;
+    return 3;
   }
 
   value->open = json_object_get_double(open);
@@ -327,7 +487,7 @@ static inline int stock_value_parse(stock_value_t* value, struct json_object* ti
 
   if (!close || !json_object_is_type(close, json_type_double))
   {
-    return 3;
+    return 4;
   }
 
   value->close = json_object_get_double(close);
@@ -335,7 +495,7 @@ static inline int stock_value_parse(stock_value_t* value, struct json_object* ti
 
   if (!high || !json_object_is_type(high, json_type_double))
   {
-    return 4;
+    return 5;
   }
 
   value->high = json_object_get_double(high);
@@ -343,7 +503,7 @@ static inline int stock_value_parse(stock_value_t* value, struct json_object* ti
 
   if (!low || !json_object_is_type(low, json_type_double))
   {
-    return 5;
+    return 6;
   }
 
   value->low = json_object_get_double(low);
@@ -378,9 +538,9 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
   quote = json_object_array_get_idx(quote, 0);
 
 
-  struct json_object* timestamp = json_object_object_get(result, "timestamp");
+  struct json_object* time = json_object_object_get(result, "timestamp");
 
-  if (!timestamp || !json_object_is_type(timestamp, json_type_array))
+  if (!time || !json_object_is_type(time, json_type_array))
   {
     error_print("Missing 'timestamp' field");
 
@@ -388,13 +548,23 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
   }
 
 
+  struct json_object* volume = json_object_object_get(quote, "volume");
+
+  if (!volume || !json_object_is_type(volume, json_type_array))
+  {
+    error_print("Missing quote 'volume' field");
+
+    return 4;
+  }
+
+
   struct json_object* open = json_object_object_get(quote, "open");
 
   if (!open || !json_object_is_type(open, json_type_array))
   {
-    error_print("Missing 'open' field");
+    error_print("Missing quote 'open' field");
 
-    return 4;
+    return 5;
   }
 
 
@@ -402,9 +572,9 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
 
   if (!close || !json_object_is_type(close, json_type_array))
   {
-    error_print("Missing 'close' field");
+    error_print("Missing quote 'close' field");
 
-    return 5;
+    return 6;
   }
 
 
@@ -412,9 +582,9 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
 
   if (!high || !json_object_is_type(high, json_type_array))
   {
-    error_print("Missing 'high' field");
+    error_print("Missing quote 'high' field");
 
-    return 6;
+    return 7;
   }
 
 
@@ -422,9 +592,9 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
 
   if (!low || !json_object_is_type(low, json_type_array))
   {
-    error_print("Missing 'low' field");
+    error_print("Missing quote 'low' field");
 
-    return 7;
+    return 8;
   }
 
   size_t count = json_object_array_length(open);
@@ -435,7 +605,7 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
   {
     error_print("Failed to malloc stock values");
 
-    return 8;
+    return 9;
   }
 
   for (size_t index = 0; index < count; index++)
@@ -443,7 +613,8 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
     stock_value_t* value = &stock->values[stock->value_count];
 
     if (stock_value_parse(value,
-      json_object_array_get_idx(timestamp, index),
+      json_object_array_get_idx(time, index),
+      json_object_array_get_idx(volume, index),
       json_object_array_get_idx(open, index),
       json_object_array_get_idx(close, index),
       json_object_array_get_idx(high, index),
@@ -460,11 +631,146 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
 /*
  * Get stock data from the internet
  */
-stock_t* stock_get(char* symbol, char* range, char* interval)
+static inline int stock_fetch(stock_t* stock)
 {
-  char* response = stock_response_get(symbol, range, interval);
+  char* response = stock_response_get(stock->symbol, stock->range, stock->interval);
 
   if (!response)
+  {
+    return 1;
+  }
+
+  struct json_object* json = json_tokener_parse(response);
+  
+  free(response);
+
+  if (!json)
+  {
+    error_print("json_tokener_parse");
+
+    return 2;
+  }
+
+  struct json_object* chart = json_object_object_get(json, "chart");
+
+  if (!chart)
+  {
+    error_print("Missing 'chart' field");
+
+    json_object_put(json);
+
+    return 3;
+  }
+
+  struct json_object* result = json_object_object_get(chart, "result");
+
+  if (!result || !json_object_is_type(result, json_type_array))
+  {
+    error_print("Missing 'result' field");
+
+    json_object_put(json);
+
+    return 4;
+  }
+
+  result = json_object_array_get_idx(result, 0);
+
+  if (stock_meta_parse(stock, result) != 0)
+  {
+    json_object_put(json);
+
+    return 5;
+  }
+
+  if (stock_values_parse(stock, result) != 0)
+  {
+    json_object_put(json);
+
+    return 6;
+  }
+
+  json_object_put(json);
+
+  stock_resize(stock, stock->value_count);
+
+  return 0;
+}
+
+/*
+ * Free data of stock
+ */
+void stock_data_free(stock_t* stock)
+{
+  free(stock->values);
+
+  free(stock->symbol);
+
+  free(stock->name);
+
+  free(stock->exchange);
+
+  free(stock->currency);
+
+  free(stock->range);
+
+  free(stock->interval);
+}
+
+/*
+ * Free stock object
+ */
+void stock_free(stock_t** stock)
+{
+  if (!stock || !(*stock)) return;
+
+  stock_data_free(*stock);
+
+  free(*stock);
+
+  *stock = NULL;
+}
+
+/*
+ * Zoom existing stock to specified range
+ */
+int stock_zoom(stock_t* stock, char* range)
+{
+  const char* interval = stock_range_interval_get(range);
+
+  if (!interval)
+  {
+    return 1;
+  }
+
+  stock_t temp_stock = (stock_t)
+  {
+    .symbol   = strdup(stock->symbol),
+    .range    = strdup(range),
+    .interval = strdup(interval),
+  };
+
+  if (stock_fetch(&temp_stock) != 0)
+  {
+    stock_data_free(&temp_stock);
+
+    return 2;
+  }
+
+  stock_data_free(stock);
+
+  *stock = temp_stock;
+
+  return 0;
+}
+
+/*
+ * Create stock with symbol and range
+ */
+stock_t* stock_create(char* symbol, char* range)
+{
+  const char* interval = stock_range_interval_get(range);
+
+  if (!interval)
   {
     return NULL;
   }
@@ -473,117 +779,26 @@ stock_t* stock_get(char* symbol, char* range, char* interval)
 
   if (!stock)
   {
-    free(response);
-
     return NULL;
   }
 
   memset(stock, 0, sizeof(stock_t));
 
-  struct json_object* json = json_tokener_parse(response);
-  
-  free(response);
-
-  if (!json)
+  *stock = (stock_t)
   {
-    free(stock);
+    .symbol   = strdup(symbol),
+    .range    = strdup(range),
+    .interval = strdup(interval),
+  };
 
-    error_print("json_tokener_parse");
+  if (stock_fetch(stock) != 0)
+  {
+    stock_free(&stock);
 
     return NULL;
-  }
-
-  struct json_object* chart = json_object_object_get(json, "chart");
-
-  if (!chart)
-  {
-    free(stock);
-
-    error_print("Missing 'chart' field");
-
-    json_object_put(json);
-
-    return NULL;
-  }
-
-  struct json_object* result = json_object_object_get(chart, "result");
-
-  if (!result || !json_object_is_type(result, json_type_array))
-  {
-    free(stock);
-
-    error_print("Missing 'result' field");
-
-    json_object_put(json);
-
-    return NULL;
-  }
-
-  result = json_object_array_get_idx(result, 0);
-
-  if (stock_meta_parse(stock, result) != 0)
-  {
-    free(stock);
-
-    json_object_put(json);
-
-    return NULL;
-  }
-
-  if (stock_values_parse(stock, result) != 0)
-  {
-    free(stock);
-
-    json_object_put(json);
-
-    return NULL;
-  }
-
-  json_object_put(json);
-
-  stock_resize(stock, stock->value_count);
-
-  if (stock->value_count > 0)
-  {
-    stock_value_t value = stock->values[0];
-
-    stock->high = value.high;
-    stock->low  = value.low;
-
-    for (size_t index = 1; index < stock->value_count; index++)
-    {
-      value = stock->values[index];
-
-      stock->high = MAX(stock->high, value.high);
-      stock->low  = MIN(stock->low,  value.low);
-    }
   }
 
   return stock;
-}
-
-/*
- * Free stock struct
- */
-void stock_free(stock_t** stock)
-{
-  if (!stock || !(*stock)) return;
-
-  free((*stock)->values);
-
-  free((*stock)->symbol);
-
-  free((*stock)->name);
-
-  free((*stock)->currency);
-
-  free((*stock)->range);
-
-  free((*stock)->interval);
-
-  free(*stock);
-
-  *stock = NULL;
 }
 
 #endif // STOCK_IMPLEMENT
