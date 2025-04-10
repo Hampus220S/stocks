@@ -203,6 +203,17 @@ typedef struct tui_list_t
 } tui_list_t;
 
 /*
+ * List data struct, that can be attached to window
+ */
+typedef struct tui_grid_t
+{
+  int                x;
+  int                y;
+  tui_window_grid_t* window;
+  tui_t*             tui;
+} tui_grid_t;
+
+/*
  * Position
  */
 typedef enum tui_pos_t
@@ -2389,6 +2400,11 @@ tui_window_grid_t* tui_parent_child_grid_create(tui_window_parent_t* parent, tui
 
   child->head.parent = parent;
 
+  if (child->head.event.init)
+  {
+    child->head.event.init((tui_window_t*) child);
+  }
+
   if (tui_windows_window_append(&parent->children, &parent->child_count, (tui_window_t*) child) != 0)
   {
     tui_window_grid_free(&child);
@@ -2794,6 +2810,131 @@ bool tui_list_event(tui_list_t* list, int key)
       default:
         break;
     }
+  }
+
+  return false;
+}
+
+/*
+ * Create grid struct
+ */
+tui_grid_t* tui_grid_create(tui_t* tui, tui_window_grid_t* window)
+{
+  tui_grid_t* grid = malloc(sizeof(tui_grid_t));
+
+  if (!grid)
+  {
+    return NULL;
+  }
+
+  memset(grid, 0, sizeof(tui_grid_t));
+
+  *grid = (tui_grid_t)
+  {
+    .window = window,
+    .tui    = tui,
+  };
+
+  return grid;
+}
+
+/*
+ * Delete grid struct
+ */
+void tui_grid_delete(tui_grid_t** grid)
+{
+  if (!grid || !(*grid)) return;
+
+  free(*grid);
+
+  *grid = NULL;
+}
+
+/*
+ *
+ */
+bool tui_grid_up_event(tui_grid_t* grid)
+{
+  if (grid->y > 0)
+  {
+    grid->y--;
+
+    return true;
+  }
+  
+  return false;
+}
+
+/*
+ *
+ */
+bool tui_grid_down_event(tui_grid_t* grid)
+{
+  tui_window_grid_t* window = grid->window;
+
+  if (!window || grid->y < (window->_size.h - 1))
+  {
+    grid->y++;
+
+    return true;
+  }
+
+  return false;
+}
+
+/*
+ *
+ */
+bool tui_grid_left_event(tui_grid_t* grid)
+{
+  if (grid->x > 0)
+  {
+    grid->x--;
+
+    return true;
+  }
+  
+  return false;
+}
+
+/*
+ *
+ */
+bool tui_grid_right_event(tui_grid_t* grid)
+{
+  tui_window_grid_t* window = grid->window;
+
+  if (!window || grid->x < (window->_size.w - 1))
+  {
+    grid->x++;
+
+    return true;
+  }
+
+  return false;
+}
+
+/*
+ *
+ */
+bool tui_grid_event(tui_grid_t* grid, int key)
+{
+  switch (key)
+  {
+    case KEY_UP:
+      return tui_grid_up_event(grid);
+
+    case KEY_DOWN:
+      return tui_grid_down_event(grid);
+
+    case KEY_LEFT:
+      return tui_grid_left_event(grid);
+
+    case KEY_RIGHT:
+      return tui_grid_right_event(grid);
+
+    default:
+      break;
   }
 
   return false;
