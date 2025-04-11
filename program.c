@@ -757,7 +757,6 @@ void data_window_init(tui_window_t* head)
     .name = "data1",
     .rect = TUI_RECT_NONE,
     .event.init = &data1_window_init,
-    .is_inflated = true,
     .pos = TUI_POS_CENTER,
   });
 
@@ -766,7 +765,6 @@ void data_window_init(tui_window_t* head)
     .name = "data2",
     .rect = TUI_RECT_NONE,
     .event.init = &data2_window_init,
-    .is_inflated = true,
     .pos = TUI_POS_CENTER,
   });
 }
@@ -819,7 +817,6 @@ void stock_window_init(tui_window_t* head)
     .rect = TUI_RECT_NONE,
     .color.bg = TUI_COLOR_WHITE,
     .event.init = &data_window_init,
-    .is_inflated = true,
     .has_padding = true,
     .data = data,
     .align = TUI_ALIGN_CENTER,
@@ -1060,7 +1057,6 @@ void root_window_init(tui_window_t* head)
     .event.free = &stock_window_free,
     .color.bg = TUI_COLOR_GREEN,
     .is_vertical = true,
-    .is_inflated = true,
     .w_grow = true,
     .h_grow = true,
   });
@@ -1122,7 +1118,6 @@ int main(int argc, char* argv[])
     .pos = TUI_POS_CENTER,
     .event.enter = &root_window_enter,
     .event.init  = &root_window_init,
-    .is_inflated = true,
     .color.bg = TUI_COLOR_RED,
   });
 

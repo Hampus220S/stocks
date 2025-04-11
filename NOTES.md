@@ -9,8 +9,6 @@
 - search input window should have stock_t* in search_data_t
 
 ## Maybe
-- move is_inflated from parent to specific children
-  and split up to x and y inflation
 - utilize that tui, menu and parent has same fields (create generic functions)
 
 ## Future

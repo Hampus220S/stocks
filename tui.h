@@ -280,7 +280,6 @@ typedef struct tui_window_parent_t
   tui_window_t** children;
   size_t         child_count;
   bool           is_vertical;
-  bool           is_inflated;
   tui_border_t   border;
   bool           has_padding;
   tui_pos_t      pos;
@@ -2074,7 +2073,6 @@ typedef struct tui_window_parent_config_t
   tui_pos_t          pos;
   tui_align_t        align;
   bool               is_vertical;
-  bool               is_inflated;
   void*              data;
 } tui_window_parent_config_t;
 
@@ -2114,7 +2112,6 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
     .pos         = config.pos,
     .align       = config.align,
     .is_vertical = config.is_vertical,
-    .is_inflated = config.is_inflated
   };
 
   return window;
