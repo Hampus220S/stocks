@@ -253,6 +253,7 @@ typedef struct tui_window_text_t
 {
   tui_window_t head;
   char*        string;
+  size_t       string_size;
   char*        text;
   bool         is_secret;
   tui_pos_t    pos;
@@ -630,6 +631,8 @@ static inline void tui_window_parent_free(tui_window_parent_t** window)
 static inline void tui_window_text_free(tui_window_text_t** window)
 {
   tui_ncurses_window_free(&(*window)->head.window);
+
+  free((*window)->string);
 
   free((*window)->text);
 
@@ -1044,6 +1047,8 @@ static inline void tui_text_render(tui_window_text_t* window)
 
     int w = ws[y];
 
+    info_print("w: %d\ttext: (%s): %d", w, window->text, length);
+
     int x_shift = MAX(0, (float) window->align / 2.f * (rect.w - w));
 
     if (letter == '\033')
@@ -1217,11 +1222,6 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
  */
 static inline void tui_window_render(tui_window_t* window)
 {
-  if (window->event.render)
-  {
-    window->event.render(window);
-  }
-
   switch (window->type)
   {
     case TUI_WINDOW_PARENT:
@@ -1913,6 +1913,44 @@ static inline void tui_resize(tui_t* tui)
 }
 
 /*
+ * Trigger render event for all windows and children in array
+ */
+static inline void tui_windows_render_event(tui_window_t** windows, size_t count)
+{
+  for (size_t index = 0; index < count; index++)
+  {
+    tui_window_t* window = windows[index];
+
+    if (window && window->event.render)
+    {
+      window->event.render(window);
+    }
+
+    if (window && window->type == TUI_WINDOW_PARENT)
+    {
+      tui_window_parent_t* parent = (tui_window_parent_t*) window;
+
+      tui_windows_render_event(parent->children, parent->child_count);
+    }
+  }
+}
+
+/*
+ * Trigger render event for all tui windows and children
+ */
+static inline void tui_render_event(tui_t* tui)
+{
+  tui_windows_render_event(tui->windows, tui->window_count);
+
+  tui_menu_t* menu = tui->menu;
+
+  if (menu)
+  {
+    tui_windows_render_event(menu->windows, menu->window_count);
+  }
+}
+
+/*
  * Render tui - active menu and all windows
  */
 void tui_render(tui_t* tui)
@@ -1920,6 +1958,8 @@ void tui_render(tui_t* tui)
   tui->cursor.is_active = false;
 
   curs_set(0);
+
+  tui_render_event(tui);
 
   tui_resize(tui);
 
@@ -2027,6 +2067,33 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
 }
 
 /*
+ *
+ */
+void tui_window_text_string_set(tui_window_text_t* window, char* string)
+{
+  if (window && string)
+  {
+    size_t length = strlen(string);
+
+    if (length >= window->string_size)
+    {
+      free(window->string);
+
+      window->string = malloc(sizeof(char) * (length + 1));
+
+      window->string_size = length + 1;
+    }
+    
+    if (window->string)
+    {
+      strcpy(window->string, string);
+
+      window->string[length] = '\0';
+    }
+  }
+}
+
+/*
  * Configuration struct for text window
  */
 typedef struct tui_window_text_config_t
@@ -2072,11 +2139,12 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_
   *window = (tui_window_text_t)
   {
     .head      = head,
-    .string    = config.string,
     .is_secret = config.is_secret,
     .pos       = config.pos,
     .align     = config.align
   };
+
+  tui_window_text_string_set(window, config.string);
 
   return window;
 }
@@ -2536,6 +2604,7 @@ tui_input_t* tui_input_create(tui_t* tui, size_t size, tui_window_text_t* window
   {
     .buffer_size = size,
     .tui         = tui,
+    .window      = window,
   };
 
 
@@ -2563,14 +2632,6 @@ tui_input_t* tui_input_create(tui_t* tui, size_t size, tui_window_text_t* window
   }
 
   tui_input_string_update(input);
-
-
-  if (window)
-  {
-    input->window = window;
-
-    window->string = input->string;
-  }
 
   return input;
 }

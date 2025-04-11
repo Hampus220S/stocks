@@ -708,6 +708,8 @@ void stock_data_free(stock_t* stock)
 {
   free(stock->values);
 
+  free(stock->_values);
+
   free(stock->symbol);
 
   free(stock->name);

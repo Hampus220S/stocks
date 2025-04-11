@@ -194,6 +194,7 @@ void chart_window_string_update(tui_window_t* head)
     struct tm *timeinfo = localtime(&raw_time);
 
     char buffer[80];
+
     strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
 
     if (sprintf(data->string, "[(%s, %.2f)]", buffer, value.close) < 0)
@@ -618,6 +619,20 @@ void data2_window_init(tui_window_t* head)
 }
 
 /*
+ *
+ */
+void value_window_render(tui_window_t* head)
+{
+  stock_data_t* data = head->data;
+
+  tui_window_text_t* window = (tui_window_text_t*) head;
+
+  info_print("Render value window (%s)", data->string);
+
+  tui_window_text_string_set(window, data->string);
+}
+
+/*
  * Fill data window with stock values
  */
 void data_window_fill(tui_window_t* head)
@@ -641,7 +656,7 @@ void data_window_fill(tui_window_t* head)
   {
     sprintf(buffer, "%s", stock->symbol);
 
-    symbol->string = strdup(buffer);
+    tui_window_text_string_set(symbol, buffer);
   }
 
 
@@ -651,7 +666,7 @@ void data_window_fill(tui_window_t* head)
   {
     sprintf(buffer, "%s", stock->name);
 
-    name->string = strdup(buffer);
+    tui_window_text_string_set(name, buffer);
   }
 
 
@@ -661,7 +676,7 @@ void data_window_fill(tui_window_t* head)
   {
     sprintf(buffer, "%s", stock->exchange);
 
-    exchange->string = strdup(buffer);
+    tui_window_text_string_set(exchange, buffer);
   }
 
 
@@ -671,7 +686,7 @@ void data_window_fill(tui_window_t* head)
   {
     sprintf(buffer, "%s", stock->currency);
 
-    currency->string = strdup(buffer);
+    tui_window_text_string_set(currency, buffer);
   }
 
 
@@ -681,7 +696,7 @@ void data_window_fill(tui_window_t* head)
   {
     sprintf(buffer, "%d", stock->volume);
 
-    volume->string = strdup(buffer);
+    tui_window_text_string_set(volume, buffer);
   }
 
 
@@ -691,7 +706,7 @@ void data_window_fill(tui_window_t* head)
   {
     sprintf(buffer, "%.2f", stock->_open);
 
-    open->string = strdup(buffer);
+    tui_window_text_string_set(open, buffer);
   }
 
 
@@ -701,7 +716,7 @@ void data_window_fill(tui_window_t* head)
   {
     sprintf(buffer, "%.2f", stock->_high);
 
-    high->string = strdup(buffer);
+    tui_window_text_string_set(high, buffer);
   }
 
 
@@ -711,7 +726,7 @@ void data_window_fill(tui_window_t* head)
   {
     sprintf(buffer, "%.2f", stock->_low);
 
-    low->string = strdup(buffer);
+    tui_window_text_string_set(low, buffer);
   }
 }
 
@@ -780,15 +795,11 @@ void stock_window_init(tui_window_t* head)
   tui_window_text_t* value_window = tui_parent_child_text_create(stock_window, (tui_window_text_config_t)
   {
     .rect = TUI_RECT_NONE,
+    .event.render = &value_window_render,
     .data = data,
   });
 
-  if (value_window)
-  {
-    data->window = value_window;
-
-    value_window->string = data->string;
-  }
+  data->window = value_window;
 
   tui_parent_child_parent_create(stock_window, (tui_window_parent_config_t)
   {
@@ -901,7 +912,7 @@ void item_window_render(tui_window_t* head)
   {
     sprintf(buffer, "%s", stock->symbol);
 
-    symbol_window->string = strdup(buffer);
+    tui_window_text_string_set(symbol_window, buffer);
   }
 
   tui_window_text_t* value_window = tui_parent_child_text_search(item_window, "value");
@@ -910,7 +921,7 @@ void item_window_render(tui_window_t* head)
   {
     sprintf(buffer, "%.2f", stock->_close);
 
-    value_window->string = strdup(buffer);
+    tui_window_text_string_set(value_window, buffer);
   }
 }
 
@@ -1021,6 +1032,7 @@ void root_window_init(tui_window_t* head)
     .name = "stock",
     .rect = TUI_RECT_NONE,
     .event.init = &stock_window_init,
+    .event.free = &stock_window_free,
     .color.bg = TUI_COLOR_GREEN,
     .is_vertical = true,
     .is_inflated = true,
