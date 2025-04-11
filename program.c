@@ -68,17 +68,21 @@ void list_search_exit(tui_window_t* window)
 /*
  *
  */
-void item_window_enter(tui_window_t* window)
+void item_window_enter(tui_window_t* head)
 {
-  window->color.bg = TUI_COLOR_RED;
+  tui_window_parent_t* window = (tui_window_parent_t*) head;
+
+  window->border.color.fg = TUI_COLOR_YELLOW;
 }
 
 /*
  *
  */
-void item_window_exit(tui_window_t* window)
+void item_window_exit(tui_window_t* head)
 {
-  window->color.bg = TUI_COLOR_CYAN;
+  tui_window_parent_t* window = (tui_window_parent_t*) head;
+
+  window->border.color.fg = TUI_COLOR_BLACK;
 }
 
 /*
@@ -205,13 +209,14 @@ static void chart_window_cursor_render(tui_window_t* head)
 
   int cursor_y = grid_stock_y_get(stock, head->_rect.h, value);
 
+  short color = TUI_COLOR_YELLOW;
 
   for (int y = 0; y < head->_rect.h; y++)
   {
     tui_window_grid_square_t* square = tui_window_grid_square_get(window, cursor_x, y);
 
     square->symbol = '|';
-    square->color.fg = TUI_COLOR_WHITE;
+    square->color.fg = color;
   }
 
   for (int x = 0; x < head->_rect.w; x++)
@@ -219,12 +224,13 @@ static void chart_window_cursor_render(tui_window_t* head)
     tui_window_grid_square_t* square = tui_window_grid_square_get(window, x, cursor_y);
 
     square->symbol = '-';
-    square->color.fg = TUI_COLOR_WHITE;
+    square->color.fg = color;
   }
 
   tui_window_grid_square_t* square = tui_window_grid_square_get(window, cursor_x, cursor_y);
 
   square->symbol = ' ';
+  square->color.bg = color;
 
   tui_cursor_set(head->tui, head->_rect.x + cursor_x, head->_rect.y + cursor_y);
 }
@@ -589,7 +595,7 @@ static int value_string_get(char* buffer, size_t size, stock_value_t value)
 {
   if (value.time == 0 || value.close == 0)
   {
-    if (snprintf(buffer, size, "[none, none]") < 0)
+    if (snprintf(buffer, size, "(none, none)") < 0)
     {
       return 1;
     }
@@ -603,12 +609,12 @@ static int value_string_get(char* buffer, size_t size, stock_value_t value)
 
   struct tm* timeinfo = localtime(&raw_time);
 
-  if (strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", timeinfo) < 0)
+  if (strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M", timeinfo) < 0)
   {
     return 2;
   }
 
-  if (snprintf(buffer, size, "[(%s, %.2f)]", time_buffer, value.close) < 0)
+  if (snprintf(buffer, size, "(%s, %.2f)", time_buffer, value.close) < 0)
   {
     return 3;
   }
@@ -784,7 +790,19 @@ void stock_window_init(tui_window_t* head)
 
   head->data = data;
 
-  tui_window_grid_t* chart_window = tui_parent_child_grid_create(stock_window, (tui_window_grid_config_t)
+  tui_window_parent_t* chart_parent = tui_parent_child_parent_create(stock_window, (tui_window_parent_config_t)
+  {
+    .rect = TUI_RECT_NONE,
+    .h_grow = true,
+    .w_grow = true,
+    .border = (tui_border_t)
+    {
+      .is_active = true,
+      .color.fg = TUI_COLOR_WHITE,
+    },
+  });
+
+  tui_window_grid_t* chart_window = tui_parent_child_grid_create(chart_parent, (tui_window_grid_config_t)
   {
     .rect = TUI_RECT_NONE,
     .color.bg = TUI_COLOR_BLACK,
@@ -806,6 +824,9 @@ void stock_window_init(tui_window_t* head)
   {
     .rect = TUI_RECT_NONE,
     .event.update = &value_window_update,
+    .color.bg = TUI_COLOR_YELLOW,
+    .align = TUI_ALIGN_CENTER,
+    .w_grow = true,
     .data = data,
   });
 
@@ -813,9 +834,14 @@ void stock_window_init(tui_window_t* head)
 
   tui_parent_child_parent_create(stock_window, (tui_window_parent_config_t)
   {
+    .border = (tui_border_t)
+    {
+      .is_active = true,
+    },
     .name = "data",
     .rect = TUI_RECT_NONE,
-    .color.bg = TUI_COLOR_WHITE,
+    .color.bg = TUI_COLOR_BLACK,
+    .color.fg = TUI_COLOR_WHITE,
     .event.init = &data_window_init,
     .has_padding = true,
     .data = data,
@@ -919,9 +945,11 @@ void item_window_update(tui_window_t* head)
 
   tui_window_text_t* symbol_window = tui_parent_child_text_search(item_window, "symbol");
 
+  short color = (stock->_close > stock->_open) ? TUI_COLOR_GREEN : TUI_COLOR_RED;
+
   if (symbol_window)
   {
-    sprintf(buffer, "%s", stock->symbol);
+    sprintf(buffer, "%s    ", stock->symbol);
 
     tui_window_text_string_set(symbol_window, buffer);
   }
@@ -933,6 +961,8 @@ void item_window_update(tui_window_t* head)
     sprintf(buffer, "%.2f", stock->_close);
 
     tui_window_text_string_set(value_window, buffer);
+
+    value_window->head.color.fg = color;
   }
 }
 
@@ -1004,9 +1034,10 @@ void list_window_init(tui_window_t* head)
       .rect = TUI_RECT_NONE,
       .border = (tui_border_t)
       {
-        .is_active = false,
+        .is_active = true,
+        .color.fg = TUI_COLOR_BLACK,
       },
-      .has_padding = true,
+      .has_padding = false,
       .event.init = &item_window_init,
       .event.free = &item_window_free,
       .event.enter = &item_window_enter,
@@ -1014,7 +1045,6 @@ void list_window_init(tui_window_t* head)
       .event.key = &item_window_key,
       .event.update = &item_window_update,
       .data = stock,
-      .color.bg = TUI_COLOR_CYAN,
       .align = TUI_ALIGN_BETWEEN,
       .w_grow = true,
     });
@@ -1043,10 +1073,14 @@ void root_window_init(tui_window_t* head)
     .event.enter = &list_window_enter,
     .event.free = &list_window_free,
     .event.key = &list_window_key,
-    .color.bg = TUI_COLOR_BLUE,
     .is_vertical = true,
     .has_padding = false,
     .h_grow = true,
+    .border = (tui_border_t)
+    {
+      .is_active = true,
+      .color.fg = TUI_COLOR_WHITE,
+    },
   });
 
   tui_window_parent_t* stock_window = tui_parent_child_parent_create(root_window, (tui_window_parent_config_t)
@@ -1055,7 +1089,6 @@ void root_window_init(tui_window_t* head)
     .rect = TUI_RECT_NONE,
     .event.init = &stock_window_init,
     .event.free = &stock_window_free,
-    .color.bg = TUI_COLOR_GREEN,
     .is_vertical = true,
     .w_grow = true,
     .h_grow = true,
@@ -1084,7 +1117,8 @@ int main(int argc, char* argv[])
   {
     .color = (tui_color_t)
     {
-      .fg = TUI_COLOR_BLACK,
+      .fg = TUI_COLOR_WHITE,
+      .bg = TUI_COLOR_BLACK,
     },
     .event.key = &tab_event,
   });
@@ -1103,13 +1137,7 @@ int main(int argc, char* argv[])
   info_print("Created TUI");
 
 
-  tui_menu_t* menu = tui_menu_create(tui, (tui_menu_config_t)
-  {
-    .color = (tui_color_t)
-    {
-      .fg = TUI_COLOR_BLACK
-    }
-  });
+  tui_menu_t* menu = tui_menu_create(tui, (tui_menu_config_t) { 0 });
 
   tui_window_parent_t* root_window = tui_menu_window_parent_create(menu, (tui_window_parent_config_t)
   {
@@ -1118,7 +1146,7 @@ int main(int argc, char* argv[])
     .pos = TUI_POS_CENTER,
     .event.enter = &root_window_enter,
     .event.init  = &root_window_init,
-    .color.bg = TUI_COLOR_RED,
+    .has_padding = true,
   });
 
   tui_menu_set(tui, menu);
