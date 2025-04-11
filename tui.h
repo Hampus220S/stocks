@@ -173,6 +173,8 @@ typedef struct tui_window_t
   tui_window_type_t    type;
   char*                name;
   bool                 is_hidden;
+  bool                 w_grow;
+  bool                 h_grow;
   tui_rect_t           rect;
   tui_rect_t           _rect;  // Temp calculated rect
   WINDOW*              window;
@@ -1515,12 +1517,10 @@ static inline int tui_child_x_get(tui_window_parent_t* parent)
  * Calculate rect of vertically aligned child
  *
  * align_count and align_index must be int, because they are used in integer arithmetic
- *
- * Maybe: Remove rect argument and use child->_rect instead
  */
-static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int align_index)
+static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
 {
-  if (align_index == 0)
+  if (*align_index == 0)
   {
     rect->y = tui_child_y_get(parent);
   }
@@ -1533,25 +1533,36 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
 
   int h_gap = 0;
 
-  if (parent->is_inflated)
+  if (child->h_grow)
   {
     if (parent->has_padding)
     {
       // Add this gap after current child
       h_gap += 1;
       
-      // recalculate h_space as the extra infalted height between windows
+      // recalculate h_space as the extra grown height between windows
       h_space = MAX(0, h_space - (align_count - 1) * 1); 
     }
 
-    int gap = h_space / align_count;
+    int gap = h_space / grow_count;
 
     h += gap;
 
-    // Inflate first windows a little bit more to fill out extra padding
-    if (h_space - gap * align_count > align_index)
+    // Grow first windows a little bit more to fill out extra padding
+    if (h_space - gap * grow_count > *grow_index)
     {
       h += 1;
+    }
+
+    (*grow_index)++;
+  }
+  // If other children is grown, but not this one
+  else if (grow_count > 0)
+  {
+    if (parent->has_padding)
+    {
+      // Add this gap after current child
+      h_gap += 1;
     }
   }
   else if (parent->align == TUI_ALIGN_BETWEEN)
@@ -1561,7 +1572,7 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
 
     h_gap += gap;
 
-    if (h_space - gap * (align_count - 1) >= align_index)
+    if (h_space - gap * (align_count - 1) >= *align_index)
     {
       h_gap += 1;
     }
@@ -1573,7 +1584,7 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
 
     int rest = h_space - gap * (align_count + 1);
 
-    if (align_index == 0 && rest > 0)
+    if (*align_index == 0 && rest > 0)
     {
       rect->y += (float) rest / 2.f;
     }
@@ -1582,7 +1593,7 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
   }
   else if (parent->align < 3) // START, CENTER, END
   {
-    if (align_index == 0) // First child to align
+    if (*align_index == 0) // First child to align
     {
       // Add this gap before current child
       if (parent->has_padding)
@@ -1599,25 +1610,27 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
     }
   }
 
-  if (align_index > 0)
+  if (*align_index > 0)
   {
     rect->y += last_child->_rect.h + h_gap;
   }
 
-  int w = parent->is_inflated ? max_size.w : child->_rect.w;
+  int w = child->w_grow ? max_size.w : child->_rect.w;
 
   rect->w = w;
   rect->h = h;
 
   rect->x += (float) parent->pos / 2.f * (max_size.w - w);
+
+  (*align_index)++;
 }
 
 /*
  * Calculate rect of horizontally aligned child
  */
-static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int align_index)
+static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
 {
-  if (align_index == 0)
+  if (*align_index == 0)
   {
     rect->x = tui_child_x_get(parent);
   }
@@ -1630,7 +1643,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
 
   int w_gap = 0;
 
-  if (parent->is_inflated)
+  if (child->w_grow)
   {
     if (parent->has_padding)
     {
@@ -1640,14 +1653,25 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
       w_space = MAX(0, w_space - (align_count - 1) * 2); 
     }
 
-    int gap = w_space / align_count;
+    int gap = w_space / grow_count;
 
     w += gap;
 
-    // Inflate first windows a little bit more to fill out extra padding
-    if (w_space - gap * align_count > align_index)
+    // Grow first windows a little bit more to fill out extra padding
+    if (w_space - gap * grow_count > *grow_index)
     {
       w += 1;
+    }
+
+    (*grow_index)++;
+  }
+  // If other children is grown, but not this one
+  else if (grow_count > 0)
+  {
+    if (parent->has_padding)
+    {
+      // Add this gap after current child
+      w_gap += 1;
     }
   }
   else if (parent->align == TUI_ALIGN_BETWEEN)
@@ -1658,7 +1682,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
     w_gap += gap;
 
     // Add extra gap between first windows
-    if (w_space - gap * (align_count - 1) >= align_index)
+    if (w_space - gap * (align_count - 1) >= *align_index)
     {
       w_gap += 1;
     }
@@ -1669,7 +1693,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
 
     int rest = w_space - gap * (align_count + 1);
 
-    if (align_index == 0 && rest > 0)
+    if (*align_index == 0 && rest > 0)
     {
       rect->x += (float) rest / 2.f;
     }
@@ -1678,7 +1702,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
   }
   else if (parent->align < 3) // START, CENTER, END
   {
-    if (align_index == 0) // First child to align
+    if (*align_index == 0) // First child to align
     {
       // Add this gap before current child
       if (parent->has_padding)
@@ -1697,31 +1721,33 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
     }
   }
 
-  if (align_index > 0)
+  if (*align_index > 0)
   {
     rect->x += last_child->_rect.w + w_gap;
   }
 
-  int h = parent->is_inflated ? max_size.h : child->_rect.h;
+  int h = child->h_grow ? max_size.h : child->_rect.h;
 
   rect->w = w;
   rect->h = h;
 
   rect->y += (float) parent->pos / 2.f * (max_size.h - h);
+
+  (*align_index)++;
 }
 
 /*
  * Calculate rect of aligned child
  */
-static inline void tui_child_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int align_index)
+static inline void tui_child_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
 {
   if (parent->is_vertical)
   {
-    tui_child_vert_rect_calc(rect, parent, child, last_child, max_size, align_size, align_count, align_index);
+    tui_child_vert_rect_calc(rect, parent, child, last_child, max_size, align_size, align_count, align_index, grow_count, grow_index);
   }
   else
   {
-    tui_child_horiz_rect_calc(rect, parent, child, last_child, max_size, align_size, align_count, align_index);
+    tui_child_horiz_rect_calc(rect, parent, child, last_child, max_size, align_size, align_count, align_index, grow_count, grow_index);
   }
 }
 
@@ -1764,6 +1790,8 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
   size_t align_count = 0;
 
+  size_t grow_count = 0;
+
   for (size_t index = 0; index < parent->child_count; index++)
   {
     tui_window_t* child = parent->children[index];
@@ -1777,12 +1805,22 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
         align_size.h += child->_rect.h;
 
         align_size.w = MAX(align_size.w, child->_rect.w);
+
+        if (child->h_grow)
+        {
+          grow_count++;
+        }
       }
       else
       {
         align_size.w += child->_rect.w;
 
         align_size.h = MAX(align_size.h, child->_rect.h);
+
+        if (child->w_grow)
+        {
+          grow_count++;
+        }
       }
     }
   }
@@ -1806,11 +1844,13 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
   align_size.h = MIN(align_size.h, max_size.h);
 
+  // x and y is stored temporarily for children
   tui_rect_t rect = { 0 };
 
   tui_window_t* last_child = NULL;
 
-  size_t align_index = 0;
+  int align_index = 0;
+  int grow_index  = 0;
 
   for (size_t index = 0; index < parent->child_count; index++)
   {
@@ -1818,13 +1858,11 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
     if (child->rect.is_none)
     {
-      tui_child_rect_calc(&rect, parent, child, last_child, max_size, align_size, align_count, align_index);
+      tui_child_rect_calc(&rect, parent, child, last_child, max_size, align_size, align_count, &align_index, grow_count, &grow_index);
 
       child->_rect = rect;
 
       last_child = child;
-
-      align_index++;
     }
     else
     {
@@ -2027,6 +2065,8 @@ typedef struct tui_window_parent_config_t
   char*              name;
   tui_window_event_t event;
   tui_rect_t         rect;
+  bool               w_grow;
+  bool               h_grow;
   tui_color_t        color;
   bool               is_hidden;
   tui_border_t       border;
@@ -2057,6 +2097,8 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
     .type      = TUI_WINDOW_PARENT,
     .name      = config.name,
     .rect      = config.rect,
+    .w_grow    = config.w_grow,
+    .h_grow    = config.h_grow,
     .is_hidden = config.is_hidden,
     .color     = config.color,
     .event     = config.event,
@@ -2113,6 +2155,8 @@ typedef struct tui_window_text_config_t
   char*              name;
   tui_window_event_t event;
   tui_rect_t         rect;
+  bool               w_grow;
+  bool               h_grow;
   tui_color_t        color;
   bool               is_hidden;
   char*              string;
@@ -2141,6 +2185,8 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_
     .type      = TUI_WINDOW_TEXT,
     .name      = config.name,
     .rect      = config.rect,
+    .w_grow    = config.w_grow,
+    .h_grow    = config.h_grow,
     .is_hidden = config.is_hidden,
     .color     = config.color,
     .event     = config.event,
@@ -2169,6 +2215,8 @@ typedef struct tui_window_grid_config_t
   char*              name;
   tui_window_event_t event;
   tui_rect_t         rect;
+  bool               w_grow;
+  bool               h_grow;
   tui_color_t        color;
   bool               is_hidden;
   tui_size_t         size;
@@ -2224,6 +2272,8 @@ static inline tui_window_grid_t* _tui_window_grid_create(tui_t* tui, tui_window_
     .type      = TUI_WINDOW_GRID,
     .name      = config.name,
     .rect      = config.rect,
+    .w_grow    = config.w_grow,
+    .h_grow    = config.h_grow,
     .is_hidden = config.is_hidden,
     .color     = config.color,
     .event     = config.event,

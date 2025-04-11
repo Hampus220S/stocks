@@ -798,6 +798,8 @@ void stock_window_init(tui_window_t* head)
     .event.render = &chart_window_line_render,
     .event.key = &chart_window_key,
     .data = data,
+    .h_grow = true,
+    .w_grow = true,
   });
 
   data->chart = chart_window;
@@ -820,6 +822,8 @@ void stock_window_init(tui_window_t* head)
     .is_inflated = true,
     .has_padding = true,
     .data = data,
+    .align = TUI_ALIGN_CENTER,
+    .w_grow = true,
   });
 }
 
@@ -951,6 +955,7 @@ void item_window_init(tui_window_t* head)
     .name = "symbol",
     .rect = TUI_RECT_NONE,
     .string = "Tjoho",
+    .align = TUI_ALIGN_START,
   });
 
   tui_parent_child_text_create(item_window, (tui_window_text_config_t)
@@ -958,6 +963,7 @@ void item_window_init(tui_window_t* head)
     .name = "value",
     .rect = TUI_RECT_NONE,
     .string = "Hejsan",
+    .align = TUI_ALIGN_END,
   });
 }
 
@@ -1012,6 +1018,8 @@ void list_window_init(tui_window_t* head)
       .event.update = &item_window_update,
       .data = stock,
       .color.bg = TUI_COLOR_CYAN,
+      .align = TUI_ALIGN_BETWEEN,
+      .w_grow = true,
     });
 
     if (data->list)
@@ -1041,6 +1049,7 @@ void root_window_init(tui_window_t* head)
     .color.bg = TUI_COLOR_BLUE,
     .is_vertical = true,
     .has_padding = false,
+    .h_grow = true,
   });
 
   tui_window_parent_t* stock_window = tui_parent_child_parent_create(root_window, (tui_window_parent_config_t)
@@ -1052,6 +1061,8 @@ void root_window_init(tui_window_t* head)
     .color.bg = TUI_COLOR_GREEN,
     .is_vertical = true,
     .is_inflated = true,
+    .w_grow = true,
+    .h_grow = true,
   });
 }
 
