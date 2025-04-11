@@ -47,12 +47,21 @@ typedef struct tui_window_t tui_window_t;
 
 /*
  * Window event struct
+ *
+ * init   - after initialization
+ * free   - before freeing
+ * enter  - on enter
+ * exit   - on exit
+ * update - before resize
+ * render - before render
+ * key    - on keypress
  */
 typedef struct tui_window_event_t
 {
   bool (*key)    (tui_window_t* window, int key);
   void (*enter)  (tui_window_t* window);
   void (*exit)   (tui_window_t* window);
+  void (*update) (tui_window_t* window);
   void (*render) (tui_window_t* window);
   void (*free)   (tui_window_t* window);
   void (*init)   (tui_window_t* window);
@@ -1047,8 +1056,6 @@ static inline void tui_text_render(tui_window_text_t* window)
 
     int w = ws[y];
 
-    info_print("w: %d\ttext: (%s): %d", w, window->text, length);
-
     int x_shift = MAX(0, (float) window->align / 2.f * (rect.w - w));
 
     if (letter == '\033')
@@ -1222,6 +1229,11 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
  */
 static inline void tui_window_render(tui_window_t* window)
 {
+  if (window->event.render)
+  {
+    window->event.render(window);
+  }
+
   switch (window->type)
   {
     case TUI_WINDOW_PARENT:
@@ -1913,40 +1925,40 @@ static inline void tui_resize(tui_t* tui)
 }
 
 /*
- * Trigger render event for all windows and children in array
+ * Update (change content) all windows and chlidren in array
  */
-static inline void tui_windows_render_event(tui_window_t** windows, size_t count)
+static inline void tui_windows_update(tui_window_t** windows, size_t count)
 {
   for (size_t index = 0; index < count; index++)
   {
     tui_window_t* window = windows[index];
 
-    if (window && window->event.render)
+    if (window && window->event.update)
     {
-      window->event.render(window);
+      window->event.update(window);
     }
 
     if (window && window->type == TUI_WINDOW_PARENT)
     {
       tui_window_parent_t* parent = (tui_window_parent_t*) window;
 
-      tui_windows_render_event(parent->children, parent->child_count);
+      tui_windows_update(parent->children, parent->child_count);
     }
   }
 }
 
 /*
- * Trigger render event for all tui windows and children
+ * Update (change content) all tui windows and chlidren
  */
-static inline void tui_render_event(tui_t* tui)
+static inline void tui_update(tui_t* tui)
 {
-  tui_windows_render_event(tui->windows, tui->window_count);
+  tui_windows_update(tui->windows, tui->window_count);
 
   tui_menu_t* menu = tui->menu;
 
   if (menu)
   {
-    tui_windows_render_event(menu->windows, menu->window_count);
+    tui_windows_update(menu->windows, menu->window_count);
   }
 }
 
@@ -1959,7 +1971,7 @@ void tui_render(tui_t* tui)
 
   curs_set(0);
 
-  tui_render_event(tui);
+  tui_update(tui);
 
   tui_resize(tui);
 

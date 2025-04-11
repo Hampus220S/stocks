@@ -164,45 +164,9 @@ typedef struct stock_data_t
 {
   stock_t*           stock;
   int                value_index;
-  char*              string;
   tui_window_grid_t* chart;
   tui_window_text_t* window;
 } stock_data_t;
-
-/*
- * Update stock value string associated with chart
- */
-void chart_window_string_update(tui_window_t* head)
-{
-  stock_data_t* data = head->data;
-
-  if (!data->string) return;
-
-  // Default value
-  sprintf(data->string, "(none, none)");
-
-  stock_t* stock = data->stock;
-
-  if (!stock) return;
-
-  if (data->value_index < stock->_value_count)
-  {
-    stock_value_t value = stock->_values[stock->_value_count - data->value_index - 1];
-
-    time_t raw_time = (time_t) value.time;
-
-    struct tm *timeinfo = localtime(&raw_time);
-
-    char buffer[80];
-
-    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
-
-    if (sprintf(data->string, "[(%s, %.2f)]", buffer, value.close) < 0)
-    {
-      info_print("Failed to sprintf");
-    }
-  }
-}
 
 /*
  *
@@ -211,26 +175,29 @@ void stock_window_free(tui_window_t* head)
 {
   stock_data_t* data = head->data;
 
-  if (data)
-  {
-    free(data->string);
-
-    free(data);
-  }
+  free(data);
 }
 
 /*
- *
+ * Render cursor in chart window with vertical and horizontal lines
  */
-void chart_window_cursor_render(tui_window_t* head)
+static void chart_window_cursor_render(tui_window_t* head)
 {
   tui_window_grid_t* window = (tui_window_grid_t*) head;
   
   stock_data_t* data = head->data;
 
+  if (!data) return;
+
   stock_t* stock = data->stock;
 
   if (!stock) return;
+
+  // Update cursor (value_index) based on resized stock
+  if (data->value_index >= stock->_value_count)
+  {
+    data->value_index = stock->_value_count - 1;
+  }
 
   int cursor_x = MAX(0, head->_rect.w - 1 - (int) data->value_index * 2);
 
@@ -238,7 +205,6 @@ void chart_window_cursor_render(tui_window_t* head)
 
   int cursor_y = grid_stock_y_get(stock, head->_rect.h, value);
 
-  tui_cursor_set(head->tui, head->_rect.x + cursor_x, head->_rect.y + cursor_y);
 
   for (int y = 0; y < head->_rect.h; y++)
   {
@@ -259,6 +225,8 @@ void chart_window_cursor_render(tui_window_t* head)
   tui_window_grid_square_t* square = tui_window_grid_square_get(window, cursor_x, cursor_y);
 
   square->symbol = ' ';
+
+  tui_cursor_set(head->tui, head->_rect.x + cursor_x, head->_rect.y + cursor_y);
 }
 
 /*
@@ -335,8 +303,6 @@ void chart_window_line_render(tui_window_t* head)
   {
     chart_window_cursor_render(head);
   }
-
-  chart_window_string_update(head);
 }
 
 /*
@@ -422,8 +388,6 @@ void chart_window_candle_render(tui_window_t* head)
   {
     chart_window_cursor_render(head);
   }
-
-  chart_window_string_update(head);
 }
 
 /*
@@ -619,17 +583,68 @@ void data2_window_init(tui_window_t* head)
 }
 
 /*
- *
+ * Get value string and store it in buffer
  */
-void value_window_render(tui_window_t* head)
+static int value_string_get(char* buffer, size_t size, stock_value_t value)
 {
-  stock_data_t* data = head->data;
+  if (value.time == 0 || value.close == 0)
+  {
+    if (snprintf(buffer, size, "[none, none]") < 0)
+    {
+      return 1;
+    }
 
+    return 0;
+  }
+
+  char time_buffer[64];
+
+  time_t raw_time = (time_t) value.time;
+
+  struct tm* timeinfo = localtime(&raw_time);
+
+  if (strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", timeinfo) < 0)
+  {
+    return 2;
+  }
+
+  if (snprintf(buffer, size, "[(%s, %.2f)]", time_buffer, value.close) < 0)
+  {
+    return 3;
+  }
+
+  return 0;
+}
+
+/*
+ * Update value window by updating the value string
+ */
+void value_window_update(tui_window_t* head)
+{
   tui_window_text_t* window = (tui_window_text_t*) head;
 
-  info_print("Render value window (%s)", data->string);
+  stock_data_t* data = head->data;
 
-  tui_window_text_string_set(window, data->string);
+  if (!data) return;
+
+  stock_t* stock = data->stock;
+
+  if (!stock) return;
+
+  stock_value_t value = { 0 };
+
+  // If the cursor is within the chart, get cursor value
+  if (data->value_index < stock->_value_count)
+  {
+    value = stock->_values[stock->_value_count - data->value_index - 1];
+  }
+
+  char buffer[64];
+
+  if (value_string_get(buffer, sizeof(buffer), value) == 0)
+  {
+    tui_window_text_string_set(window, buffer);
+  }
 }
 
 /*
@@ -771,11 +786,6 @@ void stock_window_init(tui_window_t* head)
 
   head->data = data;
 
-  data->string = malloc(sizeof(char) * 100);
-
-  chart_window_string_update(head);
-
-
   tui_window_grid_t* chart_window = tui_parent_child_grid_create(stock_window, (tui_window_grid_config_t)
   {
     .rect = TUI_RECT_NONE,
@@ -795,7 +805,7 @@ void stock_window_init(tui_window_t* head)
   tui_window_text_t* value_window = tui_parent_child_text_create(stock_window, (tui_window_text_config_t)
   {
     .rect = TUI_RECT_NONE,
-    .event.render = &value_window_render,
+    .event.update = &value_window_update,
     .data = data,
   });
 
@@ -896,7 +906,7 @@ void item_window_free(tui_window_t* head)
 /*
  *
  */
-void item_window_render(tui_window_t* head)
+void item_window_update(tui_window_t* head)
 {
   tui_window_parent_t* item_window = (tui_window_parent_t*) head;
 
@@ -974,9 +984,10 @@ void list_window_init(tui_window_t* head)
     "TSLA",
     "SPGI",
     "SBUX",
+    "SEK=X",
   };
 
-  for (size_t index = 0; index < 4; index++)
+  for (size_t index = 0; index < 5; index++)
   {
     char* symbol = symbols[index];
 
@@ -988,12 +999,17 @@ void list_window_init(tui_window_t* head)
     {
       .name = symbol,
       .rect = TUI_RECT_NONE,
+      .border = (tui_border_t)
+      {
+        .is_active = false,
+      },
+      .has_padding = true,
       .event.init = &item_window_init,
       .event.free = &item_window_free,
       .event.enter = &item_window_enter,
       .event.exit = &item_window_exit,
       .event.key = &item_window_key,
-      .event.render = &item_window_render,
+      .event.update = &item_window_update,
       .data = stock,
       .color.bg = TUI_COLOR_CYAN,
     });
@@ -1024,7 +1040,7 @@ void root_window_init(tui_window_t* head)
     .event.key = &list_window_key,
     .color.bg = TUI_COLOR_BLUE,
     .is_vertical = true,
-    .has_padding = true,
+    .has_padding = false,
   });
 
   tui_window_parent_t* stock_window = tui_parent_child_parent_create(root_window, (tui_window_parent_config_t)
