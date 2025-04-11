@@ -3,10 +3,8 @@
 - remove specific window_ _create functions and make it more generic.
 - fix tui_tab_ functions: only is_interact windows can be tabbed to
 - 'f' for fullscreen in chart window
-- input search window (under list) stock symbol show in chart
-- 's' for search bar
 - list item is marked when viewing stock in chart
-- search input window should have stock_t* in search_data_t
+- search should only enter chart if stock was found
 
 ## Maybe
 - utilize that tui, menu and parent has same fields (create generic functions)

@@ -3423,6 +3423,11 @@ tui_window_t* tui_windows_window_search(tui_window_t** windows, size_t count, ch
  */
 tui_window_text_t* tui_parent_child_text_search(tui_window_parent_t* parent, char* search)
 {
+  if (!parent || !search)
+  {
+    return NULL;
+  }
+
   tui_window_t* window = tui_windows_window_search(parent->children, parent->child_count, search);
 
   if (window && window->type == TUI_WINDOW_TEXT)
@@ -3438,6 +3443,11 @@ tui_window_text_t* tui_parent_child_text_search(tui_window_parent_t* parent, cha
  */
 tui_window_parent_t* tui_parent_child_parent_search(tui_window_parent_t* parent, char* search)
 {
+  if (!parent || !search)
+  {
+    return NULL;
+  }
+
   tui_window_t* window = tui_windows_window_search(parent->children, parent->child_count, search);
 
   if (window && window->type == TUI_WINDOW_PARENT)
@@ -3446,6 +3456,21 @@ tui_window_parent_t* tui_parent_child_parent_search(tui_window_parent_t* parent,
   }
 
   return NULL;
+}
+
+/*
+ *
+ */
+tui_window_parent_t* tui_grand_parent_get(tui_window_t* window, size_t level)
+{
+  tui_window_parent_t* parent = window->parent;
+
+  for (size_t index = 1; parent && index < level; index++)
+  {
+    parent = parent->head.parent;
+  }
+
+  return parent;
 }
 
 #endif // TUI_IMPLEMENT
