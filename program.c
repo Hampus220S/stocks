@@ -174,8 +174,6 @@ typedef struct stock_data_t
  */
 void chart_window_string_update(tui_window_t* head)
 {
-  info_print("chart_window_string_update");
-
   stock_data_t* data = head->data;
 
   if (!data->string) return;
@@ -202,8 +200,6 @@ void chart_window_string_update(tui_window_t* head)
     {
       info_print("Failed to sprintf");
     }
-
-    info_print("string: (%s)", data->string);
   }
 }
 
@@ -269,8 +265,6 @@ void chart_window_cursor_render(tui_window_t* head)
  */
 void chart_window_line_render(tui_window_t* head)
 {
-  info_print("Grid render: w:%d h:%d", head->_rect.w, head->_rect.h);
-  
   tui_window_grid_t* window = (tui_window_grid_t*) head;
   
   stock_data_t* data = head->data;
@@ -349,8 +343,6 @@ void chart_window_line_render(tui_window_t* head)
  */
 void chart_window_candle_render(tui_window_t* head)
 {
-  // info_print("Grid render: w:%d h:%d", head->_rect.w, head->_rect.h);
-  
   tui_window_grid_t* window = (tui_window_grid_t*) head;
   
   stock_data_t* data = head->data;
@@ -370,13 +362,6 @@ void chart_window_candle_render(tui_window_t* head)
 
   // Limit stock to window size
   stock_resize(data->stock, head->_rect.w / 2);
-
-  /*
-  info_print("max: %d", max);
-  info_print("min: %d", min);
-  info_print("high: %d", stock->high);
-  info_print("low:  %d", stock->low);
-  */
 
   int count = (float) head->_rect.w / 2.f;
 
@@ -399,14 +384,6 @@ void chart_window_candle_render(tui_window_t* head)
     int first = MIN(close, open);
 
     int second = MAX(close, open);
-
-    /*
-    info_print("index: %d", index);
-    info_print("  high   : %d", high);
-    info_print("  first  : %d", first);
-    info_print("  second : %d", second);
-    info_print("  low    : %d", low);
-    */
 
     short color = (value.close > value.open) ? TUI_COLOR_GREEN : TUI_COLOR_RED;
 
@@ -541,6 +518,7 @@ void data1_window_init(tui_window_t* head)
   {
     .rect = TUI_RECT_NONE,
     .is_vertical = true,
+    .pos = TUI_POS_END,
   });
 
   tui_window_parent_t* values_window = tui_parent_child_parent_create(data1_window, (tui_window_parent_config_t)
@@ -548,6 +526,7 @@ void data1_window_init(tui_window_t* head)
     .name = "values",
     .rect = TUI_RECT_NONE,
     .is_vertical = true,
+    .pos = TUI_POS_START,
   });
 
   char* labels[] =
@@ -570,11 +549,13 @@ void data1_window_init(tui_window_t* head)
   {
     tui_parent_child_text_create(labels_window, (tui_window_text_config_t)
     {
+      .rect = TUI_RECT_NONE,
       .string = labels[index],
     });
 
     tui_parent_child_text_create(values_window, (tui_window_text_config_t)
     {
+      .rect = TUI_RECT_NONE,
       .name   = names[index],
       .string = "none",
     });
@@ -592,6 +573,7 @@ void data2_window_init(tui_window_t* head)
   {
     .rect = TUI_RECT_NONE,
     .is_vertical = true,
+    .pos = TUI_POS_END,
   });
 
   tui_window_parent_t* values_window = tui_parent_child_parent_create(data2_window, (tui_window_parent_config_t)
@@ -599,6 +581,7 @@ void data2_window_init(tui_window_t* head)
     .name = "values",
     .rect = TUI_RECT_NONE,
     .is_vertical = true,
+    .pos = TUI_POS_START,
   });
 
   char* labels[] =
@@ -621,11 +604,13 @@ void data2_window_init(tui_window_t* head)
   {
     tui_parent_child_text_create(labels_window, (tui_window_text_config_t)
     {
+      .rect = TUI_RECT_NONE,
       .string = labels[index],
     });
 
     tui_parent_child_text_create(values_window, (tui_window_text_config_t)
     {
+      .rect = TUI_RECT_NONE,
       .name   = names[index],
       .string = "none",
     });
@@ -644,9 +629,9 @@ void data_window_fill(tui_window_t* head)
   if (!data) return;
   
   stock_t* stock = data->stock;
-
+  
   if (!stock) return;
-
+  
 
   char buffer[64];
 
@@ -739,14 +724,20 @@ void data_window_init(tui_window_t* head)
 
   tui_window_parent_t* data1_window = tui_parent_child_parent_create(data_window, (tui_window_parent_config_t)
   {
+    .name = "data1",
     .rect = TUI_RECT_NONE,
     .event.init = &data1_window_init,
+    .is_inflated = true,
+    .pos = TUI_POS_CENTER,
   });
 
   tui_window_parent_t* data2_window = tui_parent_child_parent_create(data_window, (tui_window_parent_config_t)
   {
+    .name = "data2",
     .rect = TUI_RECT_NONE,
     .event.init = &data2_window_init,
+    .is_inflated = true,
+    .pos = TUI_POS_CENTER,
   });
 }
 
@@ -801,8 +792,12 @@ void stock_window_init(tui_window_t* head)
 
   tui_parent_child_parent_create(stock_window, (tui_window_parent_config_t)
   {
+    .name = "data",
     .rect = TUI_RECT_NONE,
+    .color.bg = TUI_COLOR_WHITE,
     .event.init = &data_window_init,
+    .is_inflated = true,
+    .has_padding = true,
     .data = data,
   });
 }
@@ -834,14 +829,14 @@ bool item_window_key(tui_window_t* head, int key)
     return false;
   }
 
-  tui_window_t* stock_window = tui_parent_child_search(root_window, "stock");
+  tui_window_parent_t* stock_window = tui_parent_child_parent_search(root_window, "stock");
 
   if (!stock_window)
   {
     return false;
   }
 
-  stock_data_t* data = stock_window->data;
+  stock_data_t* data = stock_window->head.data;
 
   if (!data)
   {
@@ -856,6 +851,13 @@ bool item_window_key(tui_window_t* head, int key)
         data->stock = head->data;
 
         tui_window_set(head->tui, (tui_window_t*) data->chart);
+
+        tui_window_parent_t* data_window = tui_parent_child_parent_search(stock_window, "data");
+
+        if (data_window)
+        {
+          data_window_fill((tui_window_t*) data_window);
+        }
 
         return true;
       }

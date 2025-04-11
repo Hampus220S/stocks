@@ -5,6 +5,8 @@
 - grid_data_t _min and _max will be stock.high stock.low if the whole graph is visable
   then, remove _min and _max.
 - utilize that tui, menu and parent has same fields (create generic functions)
+- fix tui_tab_ functions: only is_interact windows can be tabbed to
+- treat tui_window_text_t string as malloced pointer
 
 ## Maybe
 - Remove rect argument and use child->_rect instead

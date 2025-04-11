@@ -3276,13 +3276,14 @@ tui_window_t* tui_windows_window_search(tui_window_t** windows, size_t count, ch
   {
     tui_window_t* window = windows[index];
 
-    if (strncmp(window->name, search, length) == 0)
+    if (window && window->name &&
+        strncmp(window->name, search, length) == 0)
     {
       if (rest && window->type == TUI_WINDOW_PARENT)
       {
         tui_window_parent_t* parent = (tui_window_parent_t*) window;
 
-        tui_window_t* child = tui_windows_window_search(parent->children, parent->child_count, rest);
+        tui_window_t* child = tui_windows_window_search(parent->children, parent->child_count, rest + 1);
 
         if (child)
         {
@@ -3313,11 +3314,18 @@ tui_window_text_t* tui_parent_child_text_search(tui_window_parent_t* parent, cha
 }
 
 /*
- * Search for child window in parent
+ * Search for child text window in parent
  */
-tui_window_t* tui_parent_child_search(tui_window_parent_t* parent, char* search)
+tui_window_parent_t* tui_parent_child_parent_search(tui_window_parent_t* parent, char* search)
 {
-  return tui_windows_window_search(parent->children, parent->child_count, search);
+  tui_window_t* window = tui_windows_window_search(parent->children, parent->child_count, search);
+
+  if (window && window->type == TUI_WINDOW_PARENT)
+  {
+    return (tui_window_parent_t*) window;
+  }
+
+  return NULL;
 }
 
 #endif // TUI_IMPLEMENT
