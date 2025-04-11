@@ -4,10 +4,12 @@
 - in chart, follow close price and render vertical line
 - grid_data_t _min and _max will be stock.high stock.low if the whole graph is visable
   then, remove _min and _max.
+- utilize that tui, menu and parent has same fields (create generic functions)
 
 ## Maybe
 - Remove rect argument and use child->_rect instead
 - move is_inflated from parent to specific children
+  and split up to x and y inflation
 - remove STOCK_INTERVALS and STOCK_RANGES
 
 ## Future

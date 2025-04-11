@@ -42,6 +42,7 @@ typedef struct stock_t
   stock_value_t* _values;
   size_t         _value_count;
   double         _open;
+  double         _close;
   double         _high;
   double         _low;
 } stock_t;
@@ -122,6 +123,7 @@ static inline const char* stock_interval_get(size_t index)
 /*
  * Get index of stock interval string
  */
+/*
 static ssize_t stock_interval_index_get(const char* interval)
 {
   for (ssize_t index = 0; index < STOCK_INTERVAL_COUNT; index++)
@@ -134,6 +136,7 @@ static ssize_t stock_interval_index_get(const char* interval)
 
   return -1;
 }
+*/
 
 /*
  * Get interval that corresponds to range
@@ -170,6 +173,8 @@ static inline void stock_meta_calc(stock_t* stock)
 
       stock->_high = MAX(stock->_high, value.high);
       stock->_low  = MIN(stock->_low,  value.low);
+
+      stock->_close = value.close;
     }
   }
 }
