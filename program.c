@@ -310,15 +310,26 @@ void chart_window_line_render(tui_window_t* head)
 
     int next_y = grid_stock_y_get(stock, head->_rect.h, next_value.close);
 
-    int upper = MIN(y, next_y);
-    int lower = MAX(y, next_y);
-
-    for (y = upper; y < lower; y++)
+    // If the next y is equal to y or just 1 from it
+    if (abs(next_y - y) <= 1)
     {
       tui_window_grid_square_set(window, x, y, (tui_window_grid_square_t)
       {
         .color.bg = color,
       });
+    }
+    else
+    {
+      int upper = MIN(y, next_y);
+      int lower = MAX(y, next_y);
+
+      for (y = upper; y < lower; y++)
+      {
+        tui_window_grid_square_set(window, x, y, (tui_window_grid_square_t)
+        {
+          .color.bg = color,
+        });
+      }
     }
   }
 

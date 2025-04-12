@@ -5,6 +5,9 @@
 - 'f' for fullscreen in chart window
 - list item is marked when viewing stock in chart
 - search should only enter chart if stock was found
+- print prices on every second line vertically on left side of chart
+  (0, 0, w:10, h:0) with .has_padding = true
+- print titles of every window border
 
 ## Maybe
 - utilize that tui, menu and parent has same fields (create generic functions)
