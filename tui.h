@@ -2318,6 +2318,35 @@ static inline int tui_windows_window_append(tui_window_t*** windows, size_t* cou
 }
 
 /*
+ * Append window to tui windows
+ */
+static inline int tui_window_append(tui_t* tui, tui_window_t* window)
+{
+  return tui_windows_window_append(&tui->windows, &tui->window_count, window);
+}
+
+/*
+ * Append window to menu windows, and store menu reference in window
+ */
+static inline int tui_menu_window_append(tui_menu_t* menu, tui_window_t* window)
+{
+  window->menu = menu;
+
+  return tui_windows_window_append(&menu->windows, &menu->window_count, window);
+}
+
+/*
+ * Append child to parent children, and store parent and menu reference in child
+ */
+static inline int tui_parent_child_append(tui_window_parent_t* parent, tui_window_t* child)
+{
+  child->parent = parent;
+  child->menu   = parent->head.menu;
+
+  return tui_windows_window_append(&parent->children, &parent->child_count, child);
+}
+
+/*
  * Create parent window and add it to tui
  */
 tui_window_parent_t* tui_window_parent_create(tui_t* tui, tui_window_parent_config_t config)
@@ -2329,16 +2358,16 @@ tui_window_parent_t* tui_window_parent_create(tui_t* tui, tui_window_parent_conf
     return NULL;
   }
 
-  if (window->head.event.init)
-  {
-    window->head.event.init((tui_window_t*) window);
-  }
-
-  if (tui_windows_window_append(&tui->windows, &tui->window_count, (tui_window_t*) window) != 0)
+  if (tui_window_append(tui, (tui_window_t*) window) != 0)
   {
     tui_window_parent_free(&window);
 
     return NULL;
+  }
+
+  if (window->head.event.init)
+  {
+    window->head.event.init((tui_window_t*) window);
   }
 
   return window;
@@ -2356,18 +2385,16 @@ tui_window_parent_t* tui_menu_window_parent_create(tui_menu_t* menu, tui_window_
     return NULL;
   }
 
-  window->head.menu = menu;
-
-  if (window->head.event.init)
-  {
-    window->head.event.init((tui_window_t*) window);
-  }
-
-  if (tui_windows_window_append(&menu->windows, &menu->window_count, (tui_window_t*) window) != 0)
+  if (tui_menu_window_append(menu, (tui_window_t*) window) != 0)
   {
     tui_window_parent_free(&window);
 
     return NULL;
+  }
+
+  if (window->head.event.init)
+  {
+    window->head.event.init((tui_window_t*) window);
   }
 
   return window;
@@ -2385,20 +2412,16 @@ tui_window_parent_t* tui_parent_child_parent_create(tui_window_parent_t* parent,
     return NULL;
   }
 
-  child->head.parent = parent;
-
-  child->head.menu = parent->head.menu;
-
-  if (child->head.event.init)
-  {
-    child->head.event.init((tui_window_t*) child);
-  }
-
-  if (tui_windows_window_append(&parent->children, &parent->child_count, (tui_window_t*) child) != 0)
+  if (tui_parent_child_append(parent, (tui_window_t*) child) != 0)
   {
     tui_window_parent_free(&child);
 
     return NULL;
+  }
+
+  if (child->head.event.init)
+  {
+    child->head.event.init((tui_window_t*) child);
   }
 
   return child;
@@ -2416,16 +2439,16 @@ tui_window_text_t* tui_window_text_create(tui_t* tui, tui_window_text_config_t c
     return NULL;
   }
 
-  if (window->head.event.init)
-  {
-    window->head.event.init((tui_window_t*) window);
-  }
-
-  if (tui_windows_window_append(&tui->windows, &tui->window_count, (tui_window_t*) window) != 0)
+  if (tui_window_append(tui, (tui_window_t*) window) != 0)
   {
     tui_window_text_free(&window);
 
     return NULL;
+  }
+
+  if (window->head.event.init)
+  {
+    window->head.event.init((tui_window_t*) window);
   }
 
   return window;
@@ -2443,18 +2466,16 @@ tui_window_text_t* tui_menu_window_text_create(tui_menu_t* menu, tui_window_text
     return NULL;
   }
 
-  window->head.menu = menu;
-
-  if (window->head.event.init)
-  {
-    window->head.event.init((tui_window_t*) window);
-  }
-
-  if (tui_windows_window_append(&menu->windows, &menu->window_count, (tui_window_t*) window) != 0)
+  if (tui_menu_window_append(menu, (tui_window_t*) window) != 0)
   {
     tui_window_text_free(&window);
 
     return NULL;
+  }
+
+  if (window->head.event.init)
+  {
+    window->head.event.init((tui_window_t*) window);
   }
 
   return window;
@@ -2472,20 +2493,16 @@ tui_window_text_t* tui_parent_child_text_create(tui_window_parent_t* parent, tui
     return NULL;
   }
 
-  child->head.parent = parent;
-
-  child->head.menu = parent->head.menu;
-
-  if (child->head.event.init)
-  {
-    child->head.event.init((tui_window_t*) child);
-  }
-
-  if (tui_windows_window_append(&parent->children, &parent->child_count, (tui_window_t*) child) != 0)
+  if (tui_parent_child_append(parent, (tui_window_t*) child) != 0)
   {
     tui_window_text_free(&child);
 
     return NULL;
+  }
+
+  if (child->head.event.init)
+  {
+    child->head.event.init((tui_window_t*) child);
   }
 
   return child;
@@ -2503,16 +2520,16 @@ tui_window_grid_t* tui_window_grid_create(tui_t* tui, tui_window_grid_config_t c
     return NULL;
   }
 
-  if (window->head.event.init)
-  {
-    window->head.event.init((tui_window_t*) window);
-  }
-
-  if (tui_windows_window_append(&tui->windows, &tui->window_count, (tui_window_t*) window) != 0)
+  if (tui_window_append(tui, (tui_window_t*) window) != 0)
   {
     tui_window_grid_free(&window);
 
     return NULL;
+  }
+
+  if (window->head.event.init)
+  {
+    window->head.event.init((tui_window_t*) window);
   }
 
   return window;
@@ -2530,18 +2547,16 @@ tui_window_grid_t* tui_menu_window_grid_create(tui_menu_t* menu, tui_window_grid
     return NULL;
   }
 
-  window->head.menu = menu;
-
-  if (window->head.event.init)
-  {
-    window->head.event.init((tui_window_t*) window);
-  }
-
-  if (tui_windows_window_append(&menu->windows, &menu->window_count, (tui_window_t*) window) != 0)
+  if (tui_menu_window_append(menu, (tui_window_t*) window) != 0)
   {
     tui_window_grid_free(&window);
 
     return NULL;
+  }
+
+  if (window->head.event.init)
+  {
+    window->head.event.init((tui_window_t*) window);
   }
 
   return window;
@@ -2559,20 +2574,16 @@ tui_window_grid_t* tui_parent_child_grid_create(tui_window_parent_t* parent, tui
     return NULL;
   }
 
-  child->head.parent = parent;
-
-  child->head.menu = parent->head.menu;
-
-  if (child->head.event.init)
-  {
-    child->head.event.init((tui_window_t*) child);
-  }
-
-  if (tui_windows_window_append(&parent->children, &parent->child_count, (tui_window_t*) child) != 0)
+  if (tui_parent_child_append(parent, (tui_window_t*) child) != 0)
   {
     tui_window_grid_free(&child);
 
     return NULL;
+  }
+
+  if (child->head.event.init)
+  {
+    child->head.event.init((tui_window_t*) child);
   }
 
   return child;
