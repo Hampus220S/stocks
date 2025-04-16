@@ -10,7 +10,6 @@
 - TAB AND RTAB must be handled in tui_list_event if item_index should be updated
 
 ## Maybe
-- remove tui_grand_parent_get and allow '.' (parent) in search
 
 ## Maybe (not) Panel
 Note: Why not panel? parent, menu and tui has differences that should be respected, not generalized
