@@ -34,13 +34,22 @@ typedef struct stock_t
   char*          range;
   char*          interval;
   char*          currency;
-  int            volume;
-  double         high;
-  double         low;
+  int            volume; // Regular Market Volume
+  double         high;   // Regular Market Day High
+  double         low;    // Regular Market Day Low
+
+  int            start;  // Today Start
+  int            end;    // Today End
+  double         open;   // Today Open  Price
+  double         close;  // Today Close Price
+
   stock_value_t* values;
   size_t         value_count;
+
   stock_value_t* _values;
   size_t         _value_count;
+  int            _start;
+  int            _end;
   double         _open;
   double         _close;
   double         _high;
@@ -51,11 +60,13 @@ typedef struct stock_t
  * Function declarations
  */
 
-extern stock_t* stock_create(char* symbol, char* range);
+extern stock_t* stock_create(char* symbol);
 
 extern int      stock_zoom(stock_t* stock, char* range);
 
 extern int      stock_resize(stock_t* stock, size_t count);
+
+extern int      stock_update(stock_t* stock);
 
 extern void     stock_free(stock_t** stock);
 
@@ -77,19 +88,6 @@ const char* STOCK_INTERVALS[] = { "1m", "15m", "30m", "1h", "1d" };
 #define STOCK_RANGE_COUNT    (sizeof(STOCK_RANGES)    / sizeof(char*))
 
 #define STOCK_INTERVAL_COUNT (sizeof(STOCK_INTERVALS) / sizeof(char*))
-
-/*
- * Get stock range string of index
- */
-static inline const char* stock_range_get(size_t index)
-{
-  if (index >= 0 && index < STOCK_RANGE_COUNT)
-  {
-    return STOCK_RANGES[index];
-  }
-
-  return NULL;
-}
 
 /*
  * Get index of stock range string
@@ -121,24 +119,6 @@ static inline const char* stock_interval_get(size_t index)
 }
 
 /*
- * Get index of stock interval string
- */
-/*
-static ssize_t stock_interval_index_get(const char* interval)
-{
-  for (ssize_t index = 0; index < STOCK_INTERVAL_COUNT; index++)
-  {
-    if (strcmp(STOCK_INTERVALS[index], interval) == 0)
-    {
-      return index;
-    }
-  }
-
-  return -1;
-}
-*/
-
-/*
  * Get interval that corresponds to range
  */
 static inline const char* stock_range_interval_get(const char* range)
@@ -154,29 +134,61 @@ static inline const char* stock_range_interval_get(const char* range)
 }
 
 /*
- * Calculate stock _open, _high and _low values
+ * Calculate stock start, end, open, close for 1 day
  */
-static inline void stock_meta_calc(stock_t* stock)
+static inline int stock_meta_calc(stock_t* stock)
 {
-  if (stock->_value_count > 0)
+  if (stock->value_count <= 0)
   {
-    stock_value_t value = stock->_values[0];
-
-    stock->_open = value.open;
-
-    stock->_high = value.high;
-    stock->_low  = value.low;
-
-    for (size_t index = 1; index < stock->_value_count; index++)
-    {
-      value = stock->_values[index];
-
-      stock->_high = MAX(stock->_high, value.high);
-      stock->_low  = MIN(stock->_low,  value.low);
-
-      stock->_close = value.close;
-    }
+    return 1;
   }
+
+  stock_value_t value = stock->values[stock->value_count - 1];
+
+  stock->end   = value.time;
+  stock->close = value.close;
+
+  for (size_t index = stock->value_count; index-- > 0;)
+  {
+    value = stock->values[index];
+
+    stock->start = value.time;
+    stock->open  = value.open;
+  }
+
+  return 0;
+}
+
+/*
+ * Calculate stock _start, _end, _open, _close, _high and _low values
+ */
+static inline int stock_values_calc(stock_t* stock)
+{
+  if (stock->_value_count <= 0)
+  {
+    return 1;
+  }
+
+  stock_value_t value = stock->_values[stock->_value_count - 1];
+
+  stock->_end   = value.time;
+  stock->_close = value.close;
+
+  stock->_high = value.high;
+  stock->_low  = value.low;
+
+  for (size_t index = stock->_value_count; index-- > 0;)
+  {
+    value = stock->_values[index];
+
+    stock->_high = MAX(stock->_high, value.high);
+    stock->_low  = MIN(stock->_low,  value.low);
+
+    stock->_start = value.time;
+    stock->_open  = value.open;
+  }
+
+  return 0;
 }
 
 /*
@@ -240,7 +252,10 @@ int stock_resize(stock_t* stock, size_t count)
 
   stock->_value_count = count;
 
-  stock_meta_calc(stock);
+  if (stock_values_calc(stock) != 0)
+  {
+    // Maybe use copy stock and then return error here
+  }
 
   return 0;
 }
@@ -613,6 +628,8 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
     return 9;
   }
 
+  stock->value_count = 0;
+
   for (size_t index = 0; index < count; index++)
   {
     stock_value_t* value = &stock->values[stock->value_count];
@@ -704,7 +721,7 @@ static inline int stock_fetch(stock_t* stock)
 /*
  * Free data of stock
  */
-void stock_data_free(stock_t* stock)
+static inline void stock_data_free(stock_t* stock)
 {
   free(stock->values);
 
@@ -738,7 +755,9 @@ void stock_free(stock_t** stock)
 }
 
 /*
- * Zoom existing stock to specified range
+ * Zoom existing stock to specified range and update 1d meta data
+ *
+ * On error, stock is not affected
  */
 int stock_zoom(stock_t* stock, char* range)
 {
@@ -749,32 +768,88 @@ int stock_zoom(stock_t* stock, char* range)
     return 1;
   }
 
-  stock_t temp_stock = (stock_t)
+  stock_t copy = (stock_t)
   {
     .symbol   = strdup(stock->symbol),
     .range    = strdup(range),
     .interval = strdup(interval),
   };
 
-  if (stock_fetch(&temp_stock) != 0)
+  if (stock_update(&copy) != 0)
   {
-    stock_data_free(&temp_stock);
+    stock_data_free(&copy);
 
     return 2;
   }
 
   stock_data_free(stock);
 
-  *stock = temp_stock;
+  *stock = copy;
 
   return 0;
 }
 
 /*
- * Create stock with symbol and range
+ * Update stock by fetching both specified range and 1d meta data
  */
-stock_t* stock_create(char* symbol, char* range)
+int stock_update(stock_t* stock)
 {
+  // 1. Fetch and update 1d meta data
+  char* range = "1d";
+
+  const char* interval = stock_range_interval_get(range);
+
+  if (!interval)
+  {
+    return 1;
+  }
+
+  stock_t copy = (stock_t)
+  {
+    .symbol   = strdup(stock->symbol),
+    .range    = strdup(range),
+    .interval = strdup(interval),
+  };
+
+  if (stock_fetch(&copy) != 0)
+  {
+    stock_data_free(&copy);
+
+    return 1;
+  }
+
+  if (stock_meta_calc(&copy) != 0)
+  {
+    stock_data_free(&copy);
+
+    return 2;
+  }
+
+  // 2. Fetch and update range values
+  copy.range    = strdup(stock->range);
+  copy.interval = strdup(stock->interval);
+
+  if (stock_fetch(&copy))
+  {
+    stock_data_free(&copy);
+
+    return 3;
+  }
+
+  stock_data_free(stock);
+
+  *stock = copy;
+
+  return 0;
+}
+
+/*
+ * Create stock with symbol and 1d range data
+ */
+stock_t* stock_create(char* symbol)
+{
+  char* range = "1d";
+
   const char* interval = stock_range_interval_get(range);
 
   if (!interval)
@@ -799,6 +874,13 @@ stock_t* stock_create(char* symbol, char* range)
   };
 
   if (stock_fetch(stock) != 0)
+  {
+    stock_free(&stock);
+
+    return NULL;
+  }
+
+  if (stock_meta_calc(stock) != 0)
   {
     stock_free(&stock);
 

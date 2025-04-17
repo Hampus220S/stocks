@@ -277,17 +277,9 @@ void chart_window_line_render(tui_window_t* head)
   // Limit stock to window size
   stock_resize(data->stock, head->_rect.w / 2);
 
-  int count = (float) head->_rect.w / 2.f;
+  short color = (stock->_close > stock->_open) ? TUI_COLOR_GREEN : TUI_COLOR_RED;
 
-  int first_index = MAX(0, (int) stock->_value_count - count - 1);
-
-  double first_value = stock->_values[first_index].close;
-
-  double last_value = stock->_values[stock->_value_count - 1].close;
-
-  short color = (first_value > last_value) ? TUI_COLOR_RED : TUI_COLOR_GREEN;
-
-  for (int index = 0; index < count; index++)
+  for (int index = 0; index < stock->_value_count; index++)
   {
     if (index >= stock->_value_count) break;
 
@@ -364,9 +356,7 @@ void chart_window_candle_render(tui_window_t* head)
   // Limit stock to window size
   stock_resize(data->stock, head->_rect.w / 2);
 
-  int count = (float) head->_rect.w / 2.f;
-
-  for (int index = 0; index < count; index++)
+  for (int index = 0; index < stock->_value_count; index++)
   {
     if (index >= stock->_value_count) break;
 
@@ -753,7 +743,7 @@ void data_window_fill(tui_window_t* head)
 
   if (open)
   {
-    sprintf(buffer, "%.2f", stock->_open);
+    sprintf(buffer, "%.2f", stock->open);
 
     tui_window_text_string_set(open, buffer);
   }
@@ -763,7 +753,7 @@ void data_window_fill(tui_window_t* head)
 
   if (high)
   {
-    sprintf(buffer, "%.2f", stock->_high);
+    sprintf(buffer, "%.2f", stock->high);
 
     tui_window_text_string_set(high, buffer);
   }
@@ -773,7 +763,7 @@ void data_window_fill(tui_window_t* head)
 
   if (low)
   {
-    sprintf(buffer, "%.2f", stock->_low);
+    sprintf(buffer, "%.2f", stock->low);
 
     tui_window_text_string_set(low, buffer);
   }
@@ -883,6 +873,8 @@ void stock_window_init(tui_window_t* head)
  */
 bool item_window_key(tui_window_t* head, int key)
 {
+  stock_t* stock = head->data;
+
   tui_window_parent_t* stock_window = tui_window_window_parent_search(head, ". . . stock");
 
   if (!stock_window)
@@ -902,7 +894,9 @@ bool item_window_key(tui_window_t* head, int key)
     case KEY_ENTR:
       if (data->chart)
       {
-        data->stock = head->data;
+        stock_zoom(stock, "1d");
+
+        data->stock = stock;
 
         tui_window_set(head->tui, (tui_window_t*) data->chart);
 
@@ -947,7 +941,7 @@ void item_window_update(tui_window_t* head)
 
   if (!stock) return;
 
-  short color = (stock->_close > stock->_open) ? TUI_COLOR_GREEN : TUI_COLOR_RED;
+  short color = (stock->close > stock->open) ? TUI_COLOR_GREEN : TUI_COLOR_RED;
 
   char buffer[64];
 
@@ -964,7 +958,7 @@ void item_window_update(tui_window_t* head)
 
   if (value_window)
   {
-    sprintf(buffer, "%.2f", stock->_close);
+    sprintf(buffer, "%.2f", stock->close);
 
     tui_window_text_string_set(value_window, buffer);
 
@@ -1026,7 +1020,7 @@ void list_window_init(tui_window_t* head)
   {
     char* symbol = symbols[index];
 
-    stock_t* stock = stock_create(symbol, "1d");
+    stock_t* stock = stock_create(symbol);
 
     if (!stock) continue;
 
@@ -1103,14 +1097,16 @@ bool search_window_key(tui_window_t* head, int key)
 
     char* symbol = data->input->buffer;
 
-    stock_t* stock = stock_create(symbol, "1d");
+    stock_t* stock = stock_create(symbol);
 
-    if (stock)
+    if (!stock)
     {
-      stock_free(&data->stock);
-
-      data->stock = stock;
+      return true;
     }
+
+    stock_free(&data->stock);
+
+    data->stock = stock;
 
     stock_data->stock = data->stock;
 
