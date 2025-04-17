@@ -396,7 +396,7 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
 
   if (!meta)
   {
-    error_print("Missing 'meta' field");
+    error_print("Missing 'meta' field: %s", stock->symbol);
 
     return 1;
   }
@@ -406,7 +406,7 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
 
   if (!currency || !json_object_is_type(currency, json_type_string))
   {
-    error_print("Missing 'currency' field");
+    error_print("Missing 'currency' field: %s", stock->symbol);
 
     return 3;
   }
@@ -418,7 +418,7 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
 
   if (!name || !json_object_is_type(name, json_type_string))
   {
-    error_print("Missing 'longName' field");
+    error_print("Missing 'longName' field: %s", stock->symbol);
 
     return 4;
   }
@@ -430,7 +430,7 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
 
   if (!exchange || !json_object_is_type(exchange, json_type_string))
   {
-    error_print("Missing 'fullExchangeName' field");
+    error_print("Missing 'fullExchangeName' field: %s", stock->symbol);
 
     return 5;
   }
@@ -442,7 +442,7 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
 
   if (!high || !json_object_is_type(high, json_type_double))
   {
-    error_print("Missing 'high' field");
+    error_print("Missing 'regularMarketDayHigh' field: %s", stock->symbol);
 
     return 5;
   }
@@ -454,7 +454,7 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
 
   if (!low || !json_object_is_type(low, json_type_double))
   {
-    error_print("Missing 'low' field");
+    error_print("Missing 'regularMarketDayLow' field: %s", stock->symbol);
 
     return 5;
   }
@@ -466,7 +466,7 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
 
   if (!volume || !json_object_is_type(volume, json_type_int))
   {
-    error_print("Missing 'volume' field");
+    error_print("Missing 'regularMarketVolume' field: %s", stock->symbol);
 
     return 5;
   }
@@ -540,7 +540,7 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
 
   if (!indicators)
   {
-    error_print("Missing 'indicators' field");
+    error_print("Missing 'indicators' field: %s", stock->symbol);
 
     return 1;
   }
@@ -550,7 +550,7 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
 
   if (!quote || !json_object_is_type(quote, json_type_array))
   {
-    error_print("Missing 'quote' field");
+    error_print("Missing 'quote' field: %s", stock->symbol);
 
     return 2;
   }
@@ -562,7 +562,7 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
 
   if (!time || !json_object_is_type(time, json_type_array))
   {
-    error_print("Missing 'timestamp' field");
+    error_print("Missing 'timestamp' field: %s", stock->symbol);
 
     return 3;
   }
@@ -572,7 +572,7 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
 
   if (!volume || !json_object_is_type(volume, json_type_array))
   {
-    error_print("Missing quote 'volume' field");
+    error_print("Missing quote 'volume' field: %s", stock->symbol);
 
     return 4;
   }
@@ -582,7 +582,7 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
 
   if (!open || !json_object_is_type(open, json_type_array))
   {
-    error_print("Missing quote 'open' field");
+    error_print("Missing quote 'open' field: %s", stock->symbol);
 
     return 5;
   }
@@ -592,7 +592,7 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
 
   if (!close || !json_object_is_type(close, json_type_array))
   {
-    error_print("Missing quote 'close' field");
+    error_print("Missing quote 'close' field: %s", stock->symbol);
 
     return 6;
   }
@@ -602,7 +602,7 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
 
   if (!high || !json_object_is_type(high, json_type_array))
   {
-    error_print("Missing quote 'high' field");
+    error_print("Missing quote 'high' field: %s", stock->symbol);
 
     return 7;
   }
@@ -612,7 +612,7 @@ static inline int stock_values_parse(stock_t* stock, struct json_object* result)
 
   if (!low || !json_object_is_type(low, json_type_array))
   {
-    error_print("Missing quote 'low' field");
+    error_print("Missing quote 'low' field: %s", stock->symbol);
 
     return 8;
   }
@@ -677,7 +677,7 @@ static inline int stock_fetch(stock_t* stock)
 
   if (!chart)
   {
-    error_print("Missing 'chart' field");
+    error_print("Missing 'chart' field: %s", stock->symbol);
 
     json_object_put(json);
 
@@ -688,7 +688,7 @@ static inline int stock_fetch(stock_t* stock)
 
   if (!result || !json_object_is_type(result, json_type_array))
   {
-    error_print("Missing 'result' field");
+    error_print("Missing 'result' field: %s", stock->symbol);
 
     json_object_put(json);
 

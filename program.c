@@ -141,8 +141,6 @@ bool stocks_window_key(tui_window_t* head, int key)
 
   if (tui_input_event(input, key))
   {
-    info_print("tui_input_event: %d", key);
-
     tui_window_parent_t* search_window = tui_window_window_parent_search((tui_window_t*) stocks_window, "search");
 
     if (search_window)
@@ -463,6 +461,11 @@ bool chart_window_key(tui_window_t* head, int key)
       data->value_index = stock->_value_count - 1;
 
       return false;
+
+    case 'u':
+      stock_update(stock);
+
+      return true;
 
     case 'd':
       stock_zoom(stock, "1d");
@@ -1033,22 +1036,30 @@ void list_window_init(tui_window_t* head)
 {
   tui_window_parent_t* list_window = (tui_window_parent_t*) head;
 
+  tui_parent_child_text_create(list_window, (tui_window_text_config_t)
+  {
+    .string = "Stocks",
+    .rect = (tui_rect_t)
+    {
+      .w = 0,
+      .h = 9,
+    },
+    .align = TUI_ALIGN_CENTER,
+    .color.bg = TUI_COLOR_NONE,
+  });
+
   stocks_data_t* data = head->data;
 
   char* symbols[] =
   {
     "SEK=X",
     "^OMX",
-    "NVDA",
-    "SAAB-B.ST",
     "AAPL",
     "TSLA",
     "SPGI",
-    "BLK",
-    "VFIAX",
   };
 
-  for (size_t index = 0; index < 9; index++)
+  for (size_t index = 0; index < 5; index++)
   {
     char* symbol = symbols[index];
 
@@ -1130,8 +1141,6 @@ bool search_window_key(tui_window_t* head, int key)
 
   if (key == KEY_ENTR)
   {
-    info_print("search hit enter");
-
     char* symbol = data->input->buffer;
 
     stock_t* stock = stock_create(symbol);
@@ -1263,8 +1272,6 @@ void stocks_window_init(tui_window_t* head)
  */
 void root_window_init(tui_window_t* head)
 {
-  info_print("root_window_init");
-
   tui_window_parent_t* root_window = (tui_window_parent_t*) head;
 
   tui_parent_child_parent_create(root_window, (tui_window_parent_config_t)
