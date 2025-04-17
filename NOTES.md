@@ -2,13 +2,9 @@
 - fix flickering screen
 - fix tui_tab_ functions: only is_interact windows can be tabbed to
 - 'f' for fullscreen in chart window
-- list item is marked when viewing stock in chart
-- search should only enter chart if stock was found
 - print prices on every second line vertically on left side of chart
   (0, 0, w:10, h:0) with .has_padding = true
 - print titles of every window border
-- don't calculate '_open' and '_close', read 'open' and 'close' from json
-  (problem: color of item window changes on range change :D)
 
 ## Maybe
 

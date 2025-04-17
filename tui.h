@@ -2199,7 +2199,9 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_
     .align     = config.align
   };
 
-  tui_window_text_string_set(window, config.string);
+  char* string = config.string ? config.string : "";
+
+  tui_window_text_string_set(window, string);
 
   return window;
 }

@@ -175,7 +175,7 @@ bool stocks_window_key(tui_window_t* head, int key)
  */
 static inline int grid_stock_y_get(stock_t* stock, int h, double value)
 {
-  return h - ((double) h * (value - stock->_low) / (stock->_high - stock->_low)) - 1;
+  return (h - 1) - ((double) (h - 1) * (value - stock->_low) / (stock->_high - stock->_low));
 }
 
 /*
@@ -665,9 +665,14 @@ void value_window_update(tui_window_t* head)
 
   char buffer[64];
 
-  if (value_string_get(buffer, sizeof(buffer), value) == 0)
+  if (head->tui->window == (tui_window_t*) data->chart &&
+      value_string_get(buffer, sizeof(buffer), value) == 0)
   {
     tui_window_text_string_set(window, buffer);
+  }
+  else
+  {
+    tui_window_text_string_set(window, "");
   }
 }
 
@@ -840,9 +845,10 @@ void stock_window_init(tui_window_t* head)
 
   tui_window_text_t* value_window = tui_parent_child_text_create(stock_window, (tui_window_text_config_t)
   {
+    .string = "",
     .rect = TUI_RECT_NONE,
     .event.update = &value_window_update,
-    .color.bg = TUI_COLOR_YELLOW,
+    .color.fg = TUI_COLOR_YELLOW,
     .align = TUI_ALIGN_CENTER,
     .w_grow = true,
     .data = data,
@@ -927,6 +933,32 @@ void item_window_free(tui_window_t* head)
   if (head->data)
   {
     stock_free((stock_t**) &head->data);
+  }
+}
+
+/*
+ *
+ */
+void item_window_render(tui_window_t* head)
+{
+  tui_window_parent_t* window = (tui_window_parent_t*) head;
+
+  stock_t* stock = head->data;
+
+  if (!stock) return;
+
+  tui_window_parent_t* stock_window = tui_window_window_parent_search(head, ". . . stock");
+
+  if (!stock_window) return;
+
+  stock_data_t* stock_data = stock_window->head.data;
+
+  if (!stock_data) return;
+
+  if (head->tui->window == (tui_window_t*) stock_data->chart && 
+      stock_data->stock == stock)
+  {
+    window->border.color.fg = TUI_COLOR_WHITE;
   }
 }
 
@@ -1040,6 +1072,7 @@ void list_window_init(tui_window_t* head)
       .event.exit   = &item_window_exit,
       .event.key    = &item_window_key,
       .event.update = &item_window_update,
+      .event.render = &item_window_render,
       .data         = stock,
       .align        = TUI_ALIGN_BETWEEN,
       .w_grow       = true,
@@ -1054,7 +1087,9 @@ void list_window_init(tui_window_t* head)
  */
 void search_window_enter(tui_window_t* head)
 {
-  head->color.bg = TUI_COLOR_RED;
+  tui_window_parent_t* window = (tui_window_parent_t*) head;
+
+  window->border.color.fg = TUI_COLOR_YELLOW;
 }
 
 /*
@@ -1062,7 +1097,9 @@ void search_window_enter(tui_window_t* head)
  */
 void search_window_exit(tui_window_t* head)
 {
-  head->color.bg = TUI_COLOR_BLACK;
+  tui_window_parent_t* window = (tui_window_parent_t*) head;
+
+  window->border.color.fg = TUI_COLOR_WHITE;
 }
 
 /*
@@ -1141,8 +1178,6 @@ void search_window_update(tui_window_t* head)
 
   if (text_window)
   {
-    info_print("tui_window_text_string_set");
-
     tui_window_text_string_set(text_window, data->input->string);
   }
 }
