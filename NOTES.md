@@ -3,6 +3,11 @@
 - print prices on every second line vertically on left side of chart
   (0, 0, w:10, h:0) with .has_padding = true
 - print titles of every window border
+
+## Flickering and layering
+Insight: erase functions cause flickering
+Insight: without erase (or other clearing) old text and content is still visable
+- fix flickering screen
 - don't fill window if background color is TUI_COLOR_NONE
   (title on border removes the border right now)
 
@@ -13,7 +18,6 @@
 - maybe, call init event from tui_..._window_append
 
 ## Future
-- fix flickering screen
 - 'f' for fullscreen in chart window
 - fix tui_tab_forward and tui_tab_backward
 - tidy up stock.h header library

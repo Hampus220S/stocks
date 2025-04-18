@@ -411,7 +411,20 @@ static inline void tui_window_fill(tui_window_t* window)
 {
   window->_color = tui_color_inherit(window->tui, (tui_window_t*) window->parent, window->color);
 
-  wbkgd(window->window, COLOR_PAIR(tui_color_index_get(window->_color)));
+  tui_window_color_on(window, window->_color);
+
+  if (window->color.bg != TUI_COLOR_NONE)
+  {
+    // wbkgd(window->window, COLOR_PAIR(tui_color_index_get(window->_color)));
+
+    for (int y = 0; y < window->_rect.h; y++)
+    {
+      for (int x = 0; x < window->_rect.w; x++)
+      {
+        mvwaddch(window->window, y, x, ' ');
+      }
+    }
+  }
 }
 
 /*
@@ -516,7 +529,7 @@ void tui_quit(void)
 /*
  * Create ncurses WINDOW* for tui_window_t
  */
-static inline WINDOW* tui_ncurses_window_create(tui_rect_t rect)
+static inline WINDOW* tui_ncurses_window_create(WINDOW* parent, tui_rect_t rect)
 {
   // Can't create window with no size
   if (rect.w == 0 || rect.h == 0)
@@ -524,7 +537,7 @@ static inline WINDOW* tui_ncurses_window_create(tui_rect_t rect)
     return NULL;
   }
 
-  WINDOW* window = newwin(rect.h, rect.w, rect.y, rect.x);
+  WINDOW* window = subwin(parent, rect.h, rect.w, rect.y, rect.x);
 
   if (!window)
   {
@@ -557,7 +570,7 @@ static inline WINDOW* tui_ncurses_window_resize(WINDOW* window, tui_rect_t rect)
 /*
  * Update ncurses WINDOW*, either creating it or resizing it
  */
-static inline WINDOW* tui_ncurses_window_update(WINDOW* window, tui_rect_t rect)
+static inline WINDOW* tui_ncurses_window_update(WINDOW* parent, WINDOW* window, tui_rect_t rect)
 {
   if (window)
   {
@@ -565,7 +578,7 @@ static inline WINDOW* tui_ncurses_window_update(WINDOW* window, tui_rect_t rect)
   }
   else
   {
-    return tui_ncurses_window_create(rect);
+    return tui_ncurses_window_create(parent, rect);
   }
 }
 
@@ -576,9 +589,9 @@ static inline void tui_ncurses_window_free(WINDOW** window)
 {
   if (!window || !(*window)) return;
 
-  wclear(*window);
+  // wclear(*window);
 
-  wrefresh(*window);
+  // wrefresh(*window);
 
   delwin(*window);
 
@@ -1146,7 +1159,14 @@ static inline void tui_window_text_render(tui_window_text_t* window)
 {
   tui_window_t head = window->head;
 
-  werase(head.window);
+  // werase(head.window);
+
+  /*
+  if (head.color.bg != TUI_COLOR_NONE)
+  {
+    tui_window_fill((tui_window_t*) window);
+  }
+  */
 
   tui_window_fill((tui_window_t*) window);
 
@@ -1156,7 +1176,14 @@ static inline void tui_window_text_render(tui_window_text_t* window)
     tui_text_render(window);
   }
 
-  wrefresh(head.window);
+  // wrefresh(head.window);
+
+  WINDOW* parent = head.parent ? head.parent->head.window : stdscr;
+
+  wnoutrefresh(parent);
+  wnoutrefresh(head.window);
+
+  // doupdate();
 }
 
 /*
@@ -1166,7 +1193,7 @@ static inline void tui_window_grid_render(tui_window_grid_t* window)
 {
   tui_window_t head = window->head;
 
-  werase(head.window);
+  // werase(head.window);
 
   tui_window_fill((tui_window_t*) window);
 
@@ -1197,7 +1224,14 @@ static inline void tui_window_grid_render(tui_window_grid_t* window)
     }
   }
 
-  wrefresh(head.window);
+  // wrefresh(head.window);
+
+  WINDOW* parent = head.parent ? head.parent->head.window : stdscr;
+
+  wnoutrefresh(parent);
+  wnoutrefresh(head.window);
+
+  // doupdate();
 }
 
 static inline void tui_window_render(tui_window_t* window);
@@ -1209,14 +1243,21 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
 {
   tui_window_t head = window->head;
 
-  werase(head.window);
+  // werase(head.window);
 
   tui_window_fill((tui_window_t*) window);
 
   // Draw border
   tui_border_draw(window);
 
-  wrefresh(head.window);
+  // wrefresh(head.window);
+
+  WINDOW* parent = head.parent ? head.parent->head.window : stdscr;
+
+  wnoutrefresh(parent);
+  wnoutrefresh(head.window);
+  
+  // doupdate();
 
   // Render children
   for (size_t index = 0; index < window->child_count; index++)
@@ -1284,11 +1325,8 @@ static inline void tui_window_text_size_calc(tui_window_text_t* window)
   if (!window->text)
   {
     window->head._rect = TUI_RECT_NONE;
-
-    return;
   }
-
-  if (!window->head.rect.is_none)
+  else if (!window->head.rect.is_none)
   {
     window->head._rect = (tui_rect_t)
     {
@@ -1313,30 +1351,24 @@ static inline void tui_window_text_size_calc(tui_window_text_t* window)
  */
 static inline void tui_window_grid_size_calc(tui_window_grid_t* window)
 {
-  // Text window contains at least the cursor
-  window->head._rect = (tui_rect_t) { .w = 1, .h = 1 };
-
   if (!window->grid)
   {
     window->head._rect = TUI_RECT_NONE;
-
-    return;
   }
-
-  if (!window->head.rect.is_none)
+  else if (window->head.rect.is_none)
   {
     window->head._rect = (tui_rect_t)
     {
-      .w = MAX(0, window->head.rect.w),
-      .h = MAX(0, window->head.rect.h)
+      .w = window->size.w,
+      .h = window->size.h,
     };
   }
   else
   {
     window->head._rect = (tui_rect_t)
     {
-      .w = window->size.w,
-      .h = window->size.h,
+      .w = MAX(0, window->head.rect.w),
+      .h = MAX(0, window->head.rect.h)
     };
   }
 }
@@ -1875,7 +1907,7 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
     child->_rect.y += parent->head._rect.y;
 
-    child->window = tui_ncurses_window_update(child->window, child->_rect);
+    child->window = tui_ncurses_window_update(parent->head.window, child->window, child->_rect);
 
     if (child->type == TUI_WINDOW_PARENT)
     {
@@ -1894,7 +1926,7 @@ static inline void tui_window_rect_calc(tui_window_t* window, int w, int h)
     window->_rect = tui_window_rect_get(window->rect, w, h);
   }
 
-  window->window = tui_ncurses_window_update(window->window, window->_rect);
+  window->window = tui_ncurses_window_update(stdscr, window->window, window->_rect);
 
   if(window->type == TUI_WINDOW_PARENT)
   {
@@ -2012,7 +2044,7 @@ void tui_render(tui_t* tui)
 
   tui_resize(tui);
 
-  erase();
+  // erase();
 
   tui_menu_t* menu = tui->menu;
 
@@ -2025,7 +2057,9 @@ void tui_render(tui_t* tui)
     tui_fill(tui);
   }
 
-  refresh();
+  // refresh();
+
+  wnoutrefresh(stdscr);
   
   // 3. Render tui windows
   tui_windows_render(tui->windows, tui->window_count);
@@ -2054,6 +2088,8 @@ void tui_render(tui_t* tui)
       curs_set(1);
     }
   }
+
+  doupdate();
 }
 
 /*

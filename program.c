@@ -818,6 +818,7 @@ void stock_window_init(tui_window_t* head)
 
   tui_window_parent_t* chart_parent = tui_parent_child_parent_create(stock_window, (tui_window_parent_config_t)
   {
+    .name = "chart parent",
     .rect = TUI_RECT_NONE,
     .h_grow = true,
     .w_grow = true,
@@ -830,8 +831,9 @@ void stock_window_init(tui_window_t* head)
 
   tui_window_grid_t* chart_window = tui_parent_child_grid_create(chart_parent, (tui_window_grid_config_t)
   {
+    .name = "chart",
     .rect = TUI_RECT_NONE,
-    .color.bg = TUI_COLOR_BLACK,
+    .color.bg = TUI_COLOR_CYAN,
     .size = (tui_size_t)
     {
       .w = 20,
@@ -1036,18 +1038,6 @@ void list_window_init(tui_window_t* head)
 {
   tui_window_parent_t* list_window = (tui_window_parent_t*) head;
 
-  tui_parent_child_text_create(list_window, (tui_window_text_config_t)
-  {
-    .string = "Stocks",
-    .rect = (tui_rect_t)
-    {
-      .w = 0,
-      .h = 9,
-    },
-    .align = TUI_ALIGN_CENTER,
-    .color.bg = TUI_COLOR_NONE,
-  });
-
   stocks_data_t* data = head->data;
 
   char* symbols[] =
@@ -1087,10 +1077,35 @@ void list_window_init(tui_window_t* head)
       .data         = stock,
       .align        = TUI_ALIGN_BETWEEN,
       .w_grow       = true,
+      .color.bg     = TUI_COLOR_BLACK,
     });
 
     tui_list_item_add(data->list, (tui_window_t*) item_window);
   }
+
+  tui_window_parent_t* title_parent = tui_parent_child_parent_create(list_window, (tui_window_parent_config_t)
+  {
+    .rect = (tui_rect_t)
+    {
+      .w = 0,
+      .h = 9,
+    },
+    .border = (tui_border_t)
+    {
+      .is_active = false,
+    },
+  });
+
+  tui_parent_child_text_create(title_parent, (tui_window_text_config_t)
+  {
+    .string = "Stocks",
+    .rect = TUI_RECT_NONE,
+    .w_grow = true,
+    .h_grow = true,
+    .pos = TUI_POS_START,
+    .align = TUI_ALIGN_CENTER,
+    .color.bg = TUI_COLOR_NONE,
+  });
 }
 
 /*
