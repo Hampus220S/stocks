@@ -779,9 +779,16 @@ void data_window_fill(tui_window_t* head)
 
   if (volume)
   {
-    sprintf(buffer, "%d", stock->volume);
+    if (stock->volume > 0)
+    {
+      sprintf(buffer, "%d", stock->volume);
 
-    tui_window_text_string_set(volume, buffer);
+      tui_window_text_string_set(volume, buffer);
+    }
+    else
+    {
+      tui_window_text_string_set(volume, "none");
+    }
   }
 
 

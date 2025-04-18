@@ -388,6 +388,40 @@ static inline char* stock_response_get(char* symbol, char* range, char* interval
 }
 
 /*
+ * Parse stock name, either longName or shortName, or symbol
+ */
+static inline int stock_name_parse(stock_t* stock, struct json_object* meta)
+{
+  struct json_object* name = json_object_object_get(meta, "longName");
+
+  if (name && json_object_is_type(name, json_type_string))
+  {
+    stock->name = strdup(json_object_get_string(name));
+
+    return 0;
+  }
+
+  error_print("Missing 'longName' field: %s", stock->symbol);
+
+
+  name = json_object_object_get(meta, "shortName");
+
+  if (name && json_object_is_type(name, json_type_string))
+  {
+    stock->name = strdup(json_object_get_string(name));
+
+    return 0;
+  }
+
+  error_print("Missing 'shortName' field: %s", stock->symbol);
+
+
+  stock->name = strdup(stock->symbol);
+
+  return 1;
+}
+
+/*
  * Parse stock meta data
  */
 static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
@@ -414,16 +448,10 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
   stock->currency = strdup(json_object_get_string(currency));
 
 
-  struct json_object* name = json_object_object_get(meta, "longName");
-
-  if (!name || !json_object_is_type(name, json_type_string))
+  if (stock_name_parse(stock, meta) != 0)
   {
-    error_print("Missing 'longName' field: %s", stock->symbol);
-
-    return 4;
+    error_print("Failed to parse stock name");
   }
-
-  stock->name = strdup(json_object_get_string(name));
 
 
   struct json_object* exchange = json_object_object_get(meta, "fullExchangeName");
@@ -431,8 +459,6 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
   if (!exchange || !json_object_is_type(exchange, json_type_string))
   {
     error_print("Missing 'fullExchangeName' field: %s", stock->symbol);
-
-    return 5;
   }
 
   stock->exchange = strdup(json_object_get_string(exchange));
@@ -443,8 +469,6 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
   if (!high || !json_object_is_type(high, json_type_double))
   {
     error_print("Missing 'regularMarketDayHigh' field: %s", stock->symbol);
-
-    return 5;
   }
 
   stock->high = json_object_get_double(high);
@@ -455,8 +479,6 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
   if (!low || !json_object_is_type(low, json_type_double))
   {
     error_print("Missing 'regularMarketDayLow' field: %s", stock->symbol);
-
-    return 5;
   }
 
   stock->low = json_object_get_double(low);
@@ -467,8 +489,6 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
   if (!volume || !json_object_is_type(volume, json_type_int))
   {
     error_print("Missing 'regularMarketVolume' field: %s", stock->symbol);
-
-    return 5;
   }
 
   stock->volume = json_object_get_int(volume);
@@ -804,31 +824,29 @@ int stock_update(stock_t* stock)
     return 1;
   }
 
-  stock_t copy = (stock_t)
+  stock_t day = (stock_t)
   {
     .symbol   = strdup(stock->symbol),
     .range    = strdup(range),
     .interval = strdup(interval),
   };
 
-  if (stock_fetch(&copy) != 0)
+  if (stock_fetch(&day) != 0)
   {
-    stock_data_free(&copy);
+    stock_data_free(&day);
 
     return 1;
   }
 
-  if (stock_meta_calc(&copy) != 0)
+  if (stock_meta_calc(&day) != 0)
   {
-    stock_data_free(&copy);
+    stock_data_free(&day);
 
     return 2;
   }
 
   // 2. Fetch and update range values
-  stock_data_free(&copy);
-
-  copy = (stock_t)
+  stock_t copy = (stock_t)
   {
     .symbol   = strdup(stock->symbol),
     .range    = strdup(stock->range),
@@ -837,10 +855,22 @@ int stock_update(stock_t* stock)
 
   if (stock_fetch(&copy))
   {
+    stock_data_free(&day);
+
     stock_data_free(&copy);
 
     return 3;
   }
+
+  // Perserve 1d meta data
+  copy.high  = day.high;
+  copy.low   = day.low;
+  copy.open  = day.open;
+  copy.close = day.close;
+  copy.start = day.start;
+  copy.end   = day.end;
+
+  stock_data_free(&day);
 
   stock_data_free(stock);
 
