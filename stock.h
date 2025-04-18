@@ -826,8 +826,14 @@ int stock_update(stock_t* stock)
   }
 
   // 2. Fetch and update range values
-  copy.range    = strdup(stock->range);
-  copy.interval = strdup(stock->interval);
+  stock_data_free(&copy);
+
+  copy = (stock_t)
+  {
+    .symbol   = strdup(stock->symbol),
+    .range    = strdup(stock->range),
+    .interval = strdup(stock->interval),
+  };
 
   if (stock_fetch(&copy))
   {
