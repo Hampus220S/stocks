@@ -898,11 +898,7 @@ static inline void tui_text_ws_get(int* ws, char* text, int h)
       space_index = index;
     }
 
-    if (letter == ' ' && x == 0)
-    {
-      x = 0;
-    }
-    else if (letter == '\n')
+    if (letter == '\n')
     {
       ws[y++] = x;
 
@@ -1061,10 +1057,6 @@ static inline void tui_text_render(tui_window_text_t* window)
 
         free(ansi);
       }
-    }
-    else if (letter == ' ' && x == 0)
-    {
-      x = 0;
     }
     else if (x >= w)
     {
