@@ -391,58 +391,17 @@ static inline tui_color_t tui_color_inherit(tui_t* tui, tui_window_t* window, tu
 /*
  * Turn on color of window
  */
-static inline void tui_window_color_on(tui_window_t* window, tui_color_t color)
+static inline void tui_ncurses_window_color_on(WINDOW* window, tui_color_t color)
 {
-  wattron(window->window, COLOR_PAIR(tui_color_index_get(color)));
+  wattron(window, COLOR_PAIR(tui_color_index_get(color)));
 }
 
 /*
  * Turn off color of window
  */
-static inline void tui_window_color_off(tui_window_t* window, tui_color_t color)
+static inline void tui_ncurses_window_color_off(WINDOW* window, tui_color_t color)
 {
-  wattroff(window->window, COLOR_PAIR(tui_color_index_get(color)));
-}
-
-/*
- * Fill window with color
- */
-static inline void tui_window_fill(tui_window_t* window)
-{
-  window->_color = tui_color_inherit(window->tui, (tui_window_t*) window->parent, window->color);
-
-  tui_window_color_on(window, window->_color);
-
-  if (window->color.bg != TUI_COLOR_NONE)
-  {
-    // wbkgd(window->window, COLOR_PAIR(tui_color_index_get(window->_color)));
-
-    for (int y = 0; y < window->_rect.h; y++)
-    {
-      for (int x = 0; x < window->_rect.w; x++)
-      {
-        mvwaddch(window->window, y, x, ' ');
-      }
-    }
-  }
-}
-
-/*
- * Fill menu with color
- */
-static inline void tui_menu_fill(tui_menu_t* menu)
-{
-  menu->_color = tui_color_inherit(menu->tui, NULL, menu->color);
-
-  bkgd(COLOR_PAIR(tui_color_index_get(menu->color)));
-}
-
-/*
- * Fill tui with color
- */
-static inline void tui_fill(tui_t* tui)
-{
-  bkgd(COLOR_PAIR(tui_color_index_get(tui->color)));
+  wattroff(window, COLOR_PAIR(tui_color_index_get(color)));
 }
 
 /*
@@ -459,11 +418,11 @@ void tui_border_draw(tui_window_parent_t* window)
 
   tui_color_t color = tui_color_inherit(head.tui, (tui_window_t*) window, border.color);
 
-  tui_window_color_on((tui_window_t*) window, color);
+  tui_ncurses_window_color_on(head.window, color);
 
   box(head.window, 0, 0);
 
-  tui_window_color_off((tui_window_t*) window, color);
+  tui_ncurses_window_color_off(head.window, color);
 }
 
 /*
@@ -596,6 +555,23 @@ static inline void tui_ncurses_window_free(WINDOW** window)
   delwin(*window);
 
   *window = NULL;
+}
+
+/*
+ * Fill ncurses WINDOW* with spaces
+ */
+static inline void tui_ncurses_window_fill(WINDOW* window)
+{
+  int w = getmaxx(window);
+  int h = getmaxy(window);
+
+  for (int y = 0; y < h; y++)
+  {
+    for (int x = 0; x < w; x++)
+    {
+      mvwaddch(window, y, x, ' ');
+    }
+  }
 }
 
 /*
@@ -1006,7 +982,7 @@ static inline void tui_string_ansi_handle(tui_window_t* window, char* ansi, int 
 
     wattroff(window->window, A_ATTRIBUTES);
 
-    tui_window_color_on((tui_window_t*) window, window->_color);
+    tui_ncurses_window_color_on(window->window, window->_color);
   }
   // Cursor on
   else if (code == 5)
@@ -1022,14 +998,14 @@ static inline void tui_string_ansi_handle(tui_window_t* window, char* ansi, int 
   {
     color->fg = code - 30;
 
-    tui_window_color_on((tui_window_t*) window, *color);
+    tui_ncurses_window_color_on(window->window, *color);
   }
   // Background color
   else if (code >= 40 && code <= 47)
   {
     color->bg = code - 40;
 
-    tui_window_color_on((tui_window_t*) window, *color);
+    tui_ncurses_window_color_on(window->window, *color);
   }
 }
 
@@ -1157,18 +1133,18 @@ static inline char* tui_text_extract(char* string)
  */
 static inline void tui_window_text_render(tui_window_text_t* window)
 {
-  tui_window_t head = window->head;
+  tui_window_t* head = &window->head;
 
   // werase(head.window);
 
-  /*
-  if (head.color.bg != TUI_COLOR_NONE)
-  {
-    tui_window_fill((tui_window_t*) window);
-  }
-  */
+  head->_color = tui_color_inherit(head->tui, (tui_window_t*) head->parent, head->color);
 
-  tui_window_fill((tui_window_t*) window);
+  tui_ncurses_window_color_on(head->window, head->_color);
+
+  if (head->color.bg != TUI_COLOR_NONE)
+  {
+    tui_ncurses_window_fill(head->window);
+  }
 
   // Draw text
   if (window->text)
@@ -1178,10 +1154,13 @@ static inline void tui_window_text_render(tui_window_text_t* window)
 
   // wrefresh(head.window);
 
-  WINDOW* parent = head.parent ? head.parent->head.window : stdscr;
+  /*
+  WINDOW* parent = head->parent ? head->parent->head.window : stdscr;
 
   wnoutrefresh(parent);
-  wnoutrefresh(head.window);
+  */
+
+  wnoutrefresh(head->window);
 
   // doupdate();
 }
@@ -1191,17 +1170,24 @@ static inline void tui_window_text_render(tui_window_text_t* window)
  */
 static inline void tui_window_grid_render(tui_window_grid_t* window)
 {
-  tui_window_t head = window->head;
+  tui_window_t* head = &window->head;
 
   // werase(head.window);
 
-  tui_window_fill((tui_window_t*) window);
+  head->_color = tui_color_inherit(head->tui, (tui_window_t*) head->parent, head->color);
+
+  tui_ncurses_window_color_on(head->window, head->_color);
+
+  if (head->color.bg != TUI_COLOR_NONE)
+  {
+    tui_ncurses_window_fill(head->window);
+  }
 
   // Draw grid
   if (window->grid)
   {
-    int x_shift = MAX(0, (head._rect.w - window->_size.w) / 2.f);
-    int y_shift = MAX(0, (head._rect.h - window->_size.h) / 2.f);
+    int x_shift = MAX(0, (head->_rect.w - window->_size.w) / 2.f);
+    int y_shift = MAX(0, (head->_rect.h - window->_size.h) / 2.f);
 
     for (int y = 0; y < window->_size.h; y++)
     {
@@ -1213,23 +1199,26 @@ static inline void tui_window_grid_render(tui_window_grid_t* window)
 
         char symbol = square.symbol ? square.symbol : ' ';
 
-        tui_color_t color = tui_color_inherit(head.tui, (tui_window_t*) window, square.color);
+        tui_color_t color = tui_color_inherit(head->tui, (tui_window_t*) window, square.color);
 
-        tui_window_color_on((tui_window_t*) window, color);
+        tui_ncurses_window_color_on(head->window, color);
 
-        mvwaddch(head.window, y_shift + y, x_shift + x, symbol);
+        mvwaddch(head->window, y_shift + y, x_shift + x, symbol);
 
-        tui_window_color_off((tui_window_t*) window, color);
+        tui_ncurses_window_color_off(head->window, color);
       }
     }
   }
 
   // wrefresh(head.window);
 
-  WINDOW* parent = head.parent ? head.parent->head.window : stdscr;
+  /*
+  WINDOW* parent = head->parent ? head->parent->head->window : stdscr;
 
   wnoutrefresh(parent);
-  wnoutrefresh(head.window);
+  */
+
+  wnoutrefresh(head->window);
 
   // doupdate();
 }
@@ -1241,21 +1230,31 @@ static inline void tui_window_render(tui_window_t* window);
  */
 static inline void tui_window_parent_render(tui_window_parent_t* window)
 {
-  tui_window_t head = window->head;
+  tui_window_t* head = &window->head;
 
   // werase(head.window);
 
-  tui_window_fill((tui_window_t*) window);
+  head->_color = tui_color_inherit(head->tui, (tui_window_t*) head->parent, head->color);
+
+  tui_ncurses_window_color_on(head->window, head->_color);
+
+  if (head->color.bg != TUI_COLOR_NONE)
+  {
+    tui_ncurses_window_fill(head->window);
+  }
 
   // Draw border
   tui_border_draw(window);
 
   // wrefresh(head.window);
 
+  /*
   WINDOW* parent = head.parent ? head.parent->head.window : stdscr;
 
   wnoutrefresh(parent);
-  wnoutrefresh(head.window);
+  */
+
+  wnoutrefresh(head->window);
   
   // doupdate();
 
@@ -2050,12 +2049,16 @@ void tui_render(tui_t* tui)
 
   if (menu)
   {
-    tui_menu_fill(menu);
+    menu->_color = tui_color_inherit(menu->tui, NULL, menu->color);
+
+    tui_ncurses_window_color_on(stdscr, menu->_color);
   }
   else
   {
-    tui_fill(tui);
+    tui_ncurses_window_color_on(stdscr, tui->color);
   }
+
+  tui_ncurses_window_fill(stdscr);
 
   // refresh();
 

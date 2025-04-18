@@ -3,6 +3,7 @@
 - print prices on every second line vertically on left side of chart
   (0, 0, w:10, h:0) with .has_padding = true
 - print titles of every window border
+- when extracting head from window: tui_window_t* head = &window->head;
 
 ## Flickering and layering
 Insight: erase functions cause flickering
