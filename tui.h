@@ -173,6 +173,7 @@ typedef struct tui_window_t
   tui_window_type_t    type;
   char*                name;
   bool                 is_hidden;
+  bool                 is_interact;
   bool                 w_grow;
   bool                 h_grow;
   tui_rect_t           rect;
@@ -2070,6 +2071,7 @@ typedef struct tui_window_parent_config_t
   bool               h_grow;
   tui_color_t        color;
   bool               is_hidden;
+  bool               is_interact;
   tui_border_t       border;
   bool               has_padding;
   tui_pos_t          pos;
@@ -2094,16 +2096,17 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
 
   tui_window_t head = (tui_window_t)
   {
-    .type      = TUI_WINDOW_PARENT,
-    .name      = config.name,
-    .rect      = config.rect,
-    .w_grow    = config.w_grow,
-    .h_grow    = config.h_grow,
-    .is_hidden = config.is_hidden,
-    .color     = config.color,
-    .event     = config.event,
-    .data      = config.data,
-    .tui       = tui
+    .type        = TUI_WINDOW_PARENT,
+    .name        = config.name,
+    .rect        = config.rect,
+    .w_grow      = config.w_grow,
+    .h_grow      = config.h_grow,
+    .is_hidden   = config.is_hidden,
+    .is_interact = config.is_interact,
+    .color       = config.color,
+    .event       = config.event,
+    .data        = config.data,
+    .tui         = tui
   };
 
   *window = (tui_window_parent_t)
@@ -2158,6 +2161,7 @@ typedef struct tui_window_text_config_t
   bool               h_grow;
   tui_color_t        color;
   bool               is_hidden;
+  bool               is_interact;
   char*              string;
   bool               is_secret;
   tui_pos_t          pos;
@@ -2181,16 +2185,17 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_
 
   tui_window_t head = (tui_window_t)
   {
-    .type      = TUI_WINDOW_TEXT,
-    .name      = config.name,
-    .rect      = config.rect,
-    .w_grow    = config.w_grow,
-    .h_grow    = config.h_grow,
-    .is_hidden = config.is_hidden,
-    .color     = config.color,
-    .event     = config.event,
-    .data      = config.data,
-    .tui       = tui
+    .type        = TUI_WINDOW_TEXT,
+    .name        = config.name,
+    .rect        = config.rect,
+    .w_grow      = config.w_grow,
+    .h_grow      = config.h_grow,
+    .is_hidden   = config.is_hidden,
+    .is_interact = config.is_interact,
+    .color       = config.color,
+    .event       = config.event,
+    .data        = config.data,
+    .tui         = tui
   };
 
   *window = (tui_window_text_t)
@@ -2220,6 +2225,7 @@ typedef struct tui_window_grid_config_t
   bool               h_grow;
   tui_color_t        color;
   bool               is_hidden;
+  bool               is_interact;
   tui_size_t         size;
   void*              data;
 } tui_window_grid_config_t;
@@ -2270,16 +2276,17 @@ static inline tui_window_grid_t* _tui_window_grid_create(tui_t* tui, tui_window_
 
   tui_window_t head = (tui_window_t)
   {
-    .type      = TUI_WINDOW_GRID,
-    .name      = config.name,
-    .rect      = config.rect,
-    .w_grow    = config.w_grow,
-    .h_grow    = config.h_grow,
-    .is_hidden = config.is_hidden,
-    .color     = config.color,
-    .event     = config.event,
-    .data      = config.data,
-    .tui       = tui
+    .type        = TUI_WINDOW_GRID,
+    .name        = config.name,
+    .rect        = config.rect,
+    .w_grow      = config.w_grow,
+    .h_grow      = config.h_grow,
+    .is_hidden   = config.is_hidden,
+    .is_interact = config.is_interact,
+    .color       = config.color,
+    .event       = config.event,
+    .data        = config.data,
+    .tui         = tui
   };
 
   *window = (tui_window_grid_t)
@@ -3184,8 +3191,10 @@ static bool tui_windows_tab_forward(tui_t* tui, tui_window_t** windows, size_t c
   {
     tui_window_t* window = windows[index];
 
-    if (!window->is_hidden) // && window->is_interactable
+    if (!window->is_hidden && window->is_interact)
     {
+      // info_print("Found tab window (%s)", window->name);
+
       tui_window_set(tui, window);
 
       return true;
@@ -3224,16 +3233,13 @@ bool tui_tab_forward(tui_t* tui)
   {
     size_t child_index = tui_window_index_get(parent->children, parent->child_count, window);
 
-    if (child_index == -1)
-    {
-      error_print("tui_window_index_get");
-
-      return false;
-    }
+    // If child_index = -1 (no child found),
+    // it will be treated as tabbing into first child (-1 += 1 -> 0)
 
     child_index += 1;
 
-    if (tui_windows_tab_forward(tui, parent->children + child_index, parent->child_count - child_index))
+    if (child_index < parent->child_count &&
+        tui_windows_tab_forward(tui, parent->children + child_index, parent->child_count - child_index))
     {
       return true;
     }
@@ -3251,14 +3257,16 @@ bool tui_tab_forward(tui_t* tui)
 
     if (window_index == -1)
     {
-      error_print("tui_window_index_get");
+      // Here, a window that belongs to menu is not showing up
+      error_print("menu tui_window_index_get");
 
       return false;
     }
 
     window_index += 1;
 
-    if (tui_windows_tab_forward(tui, menu->windows + window_index, menu->window_count - window_index))
+    if (window_index < menu->window_count &&
+        tui_windows_tab_forward(tui, menu->windows + window_index, menu->window_count - window_index))
     {
       return true;
     }
@@ -3269,14 +3277,16 @@ bool tui_tab_forward(tui_t* tui)
 
     if (window_index == -1)
     {
-      error_print("tui_window_index_get");
+      // Here, a window that belongs to tui is not showing up
+      error_print("tui tui_window_index_get");
 
       return false;
     }
 
     window_index += 1;
 
-    if (tui_windows_tab_forward(tui, tui->windows + window_index, tui->window_count - window_index))
+    if (window_index < tui->window_count &&
+        tui_windows_tab_forward(tui, tui->windows + window_index, tui->window_count - window_index))
     {
       return true;
     }
@@ -3304,7 +3314,7 @@ static bool tui_windows_tab_backward(tui_t* tui, tui_window_t** windows, size_t 
   {
     tui_window_t* window = windows[index];
 
-    if (!window->is_hidden) // && window->is_interactable
+    if (!window->is_hidden && window->is_interact)
     {
       tui_window_set(tui, window);
 
@@ -3335,7 +3345,8 @@ bool tui_tab_backward(tui_t* tui)
 
     if (child_index == -1)
     {
-      error_print("tui_window_index_get");
+      // Here: Child window is not showing up in parent's children
+      error_print("parent tui_window_index_get");
 
       return false;
     }
@@ -3358,6 +3369,7 @@ bool tui_tab_backward(tui_t* tui)
     
     if (window_index == -1)
     {
+      // Here, a window that belongs to menu is not showing up
       error_print("tui_window_index_get");
 
       return false;
@@ -3374,6 +3386,7 @@ bool tui_tab_backward(tui_t* tui)
 
     if (window_index == -1)
     {
+      // Here, a window that belongs to tui is not showing up
       error_print("tui_window_index_get");
 
       return false;

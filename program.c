@@ -1384,6 +1384,7 @@ void root_window_init(tui_window_t* head)
     .is_vertical = true,
     .has_padding = false,
     .h_grow      = true,
+    .is_interact = true,
   });
 
   tui_parent_child_parent_create(root_window, (tui_window_parent_config_t)
@@ -1439,6 +1440,7 @@ int main(int argc, char* argv[])
 
   tui_menu_window_parent_create(menu, (tui_window_parent_config_t)
   {
+    .name = "root",
     .rect = { 0 },
     .align = TUI_ALIGN_CENTER,
     .pos = TUI_POS_CENTER,
