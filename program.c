@@ -462,6 +462,18 @@ bool chart_window_key(tui_window_t* head, int key)
 
       return false;
 
+    case KEY_ESC:
+      tui_window_parent_t* stocks_window = tui_window_window_parent_search(head, ". . . stocks");
+
+      if (stocks_window)
+      {
+        tui_window_set(head->tui, (tui_window_t*) stocks_window);
+
+        return true;
+      }
+
+      return false;
+
     case 'u':
       stock_update(stock);
 
@@ -1370,7 +1382,7 @@ void root_window_init(tui_window_t* head)
 
   tui_parent_child_parent_create(root_window, (tui_window_parent_config_t)
   {
-    .event.enter = &parent_window_enter,
+    .name        = "stocks",
     .rect        = TUI_RECT_NONE,
     .event.init  = &stocks_window_init,
     .event.enter = &stocks_window_enter,

@@ -3146,8 +3146,6 @@ void tui_start(tui_t* tui)
 
   while (tui->is_running && (key = wgetch(stdscr)))
   {
-    // info_print("KEY: %d", key);
-
     if (key == KEY_CTRLC)
     {
       tui->is_running = false;
@@ -3424,6 +3422,7 @@ tui_window_t* tui_windows_window_search(tui_window_t** windows, size_t count, ch
     tui_window_t* window = windows[index];
 
     if (window && window->name &&
+        strlen(window->name) == length &&
         strncmp(window->name, search, length) == 0)
     {
       if (!rest) return window;
@@ -3444,7 +3443,7 @@ tui_window_t* tui_window_search(tui_t* tui, char* search)
 
   size_t length = rest ? (rest - search) : strlen(search);
 
-  if (strncmp(search, ".", length) == 0)
+  if (length == 1 && *search == '.')
   {
     return NULL;
   }
@@ -3461,7 +3460,7 @@ tui_window_t* tui_menu_window_search(tui_menu_t* menu, char* search)
 
   size_t length = rest ? (rest - search) : strlen(search);
 
-  if (strncmp(search, ".", length) == 0)
+  if (length == 1 && *search == '.')
   {
     return NULL;
   }
@@ -3484,7 +3483,7 @@ tui_window_t* tui_window_window_search(tui_window_t* window, char* search)
 
   size_t length = rest ? (rest - search) : strlen(search);
 
-  if (strncmp(search, ".", length) == 0)
+  if (length == 1 && *search == '.')
   {
     if (!rest)
     {
