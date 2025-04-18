@@ -2,7 +2,7 @@
 - fix tui_tab_ functions: only is_interact windows can be tabbed to
 - print prices on every second line vertically on left side of chart
   (0, 0, w:10, h:0) with .has_padding = true
-- print titles of every window border
+- problem: spaces in beginning of lines are removed by tui_text_render and tui_text_ws_get
 
 ## Duplicate
 - tui_..._window_..._search (only tui_window_t** windows and size_t count is needed)

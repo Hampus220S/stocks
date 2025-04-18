@@ -799,6 +799,17 @@ void data_window_init(tui_window_t* head)
     .event.init = &data2_window_init,
     .pos = TUI_POS_CENTER,
   });
+
+  tui_parent_child_text_create(data_window, (tui_window_text_config_t)
+  {
+    .string = " Data ",
+    .rect = (tui_rect_t)
+    {
+      .w = 0,
+      .h = 1,
+    },
+    .align = TUI_ALIGN_CENTER,
+  });
 }
 
 /*
@@ -847,6 +858,17 @@ void stock_window_init(tui_window_t* head)
   });
 
   data->chart = chart_window;
+
+  tui_parent_child_text_create(chart_parent, (tui_window_text_config_t)
+  {
+    .string = " Chart ",
+    .rect = (tui_rect_t)
+    {
+      .w = 0,
+      .h = 1,
+    },
+    .align = TUI_ALIGN_CENTER,
+  });
 
   tui_window_text_t* value_window = tui_parent_child_text_create(stock_window, (tui_window_text_config_t)
   {
@@ -1083,28 +1105,15 @@ void list_window_init(tui_window_t* head)
     tui_list_item_add(data->list, (tui_window_t*) item_window);
   }
 
-  tui_window_parent_t* title_parent = tui_parent_child_parent_create(list_window, (tui_window_parent_config_t)
+  tui_parent_child_text_create(list_window, (tui_window_text_config_t)
   {
+    .string = " Stocks ",
     .rect = (tui_rect_t)
     {
       .w = 0,
-      .h = 9,
+      .h = 1,
     },
-    .border = (tui_border_t)
-    {
-      .is_active = false,
-    },
-  });
-
-  tui_parent_child_text_create(title_parent, (tui_window_text_config_t)
-  {
-    .string = "Stocks",
-    .rect = TUI_RECT_NONE,
-    .w_grow = true,
-    .h_grow = true,
-    .pos = TUI_POS_START,
     .align = TUI_ALIGN_CENTER,
-    .color.bg = TUI_COLOR_NONE,
   });
 }
 
@@ -1224,6 +1233,17 @@ void search_window_init(tui_window_t* head)
   });
 
   data->input = tui_input_create(head->tui, 100, text_window);
+
+  tui_parent_child_text_create(search_window, (tui_window_text_config_t)
+  {
+    .string = " Search ",
+    .rect = (tui_rect_t)
+    {
+      .w = 0,
+      .h = 1,
+    },
+    .align = TUI_ALIGN_CENTER,
+  });
 }
 
 /*
