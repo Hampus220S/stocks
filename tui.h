@@ -418,11 +418,14 @@ void tui_border_draw(tui_window_parent_t* window)
 
   tui_color_t color = tui_color_inherit(head->tui, (tui_window_t*) window, border.color);
 
-  tui_ncurses_window_color_on(head->window, color);
+  if (color.fg != TUI_COLOR_NONE || color.bg != TUI_COLOR_NONE)
+  {
+    tui_ncurses_window_color_on(head->window, color);
 
-  box(head->window, 0, 0);
+    box(head->window, 0, 0);
 
-  tui_ncurses_window_color_off(head->window, color);
+    tui_ncurses_window_color_off(head->window, color);
+  }
 }
 
 /*

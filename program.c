@@ -82,7 +82,7 @@ void item_window_exit(tui_window_t* head)
 {
   tui_window_parent_t* window = (tui_window_parent_t*) head;
 
-  window->border.color.fg = TUI_COLOR_BLACK;
+  window->border.color.fg = TUI_COLOR_NONE;
 }
 
 /*
@@ -847,7 +847,6 @@ void data_window_init(tui_window_t* head)
     .rect = TUI_RECT_NONE,
     .event.init = &data1_window_init,
     .pos = TUI_POS_CENTER,
-    .color.bg = TUI_COLOR_NONE,
   });
 
   tui_parent_child_parent_create(data_window, (tui_window_parent_config_t)
@@ -856,7 +855,6 @@ void data_window_init(tui_window_t* head)
     .rect = TUI_RECT_NONE,
     .event.init = &data2_window_init,
     .pos = TUI_POS_CENTER,
-    .color.bg = TUI_COLOR_NONE,
   });
 
   tui_parent_child_text_create(data_window, (tui_window_text_config_t)
@@ -868,7 +866,6 @@ void data_window_init(tui_window_t* head)
       .h = 1,
     },
     .align = TUI_ALIGN_CENTER,
-    .color.bg = TUI_COLOR_NONE,
   });
 }
 
@@ -946,7 +943,6 @@ void stock_window_init(tui_window_t* head)
     .rect = TUI_RECT_NONE,
     .event.update = &value_window_update,
     .color.fg = TUI_COLOR_YELLOW,
-    .color.bg = TUI_COLOR_NONE,
     .align = TUI_ALIGN_CENTER,
     .w_grow = true,
     .data = data,
@@ -962,7 +958,6 @@ void stock_window_init(tui_window_t* head)
     },
     .name = "data",
     .rect = TUI_RECT_NONE,
-    .color.bg = TUI_COLOR_BLACK,
     .color.fg = TUI_COLOR_WHITE,
     .event.init = &data_window_init,
     .has_padding = true,
@@ -1157,7 +1152,6 @@ void list_window_init(tui_window_t* head)
       .border       = (tui_border_t)
       {
         .is_active  = true,
-        .color.fg   = TUI_COLOR_BLACK,
       },
       .has_padding  = false,
       .event.init   = &item_window_init,
@@ -1170,7 +1164,6 @@ void list_window_init(tui_window_t* head)
       .data         = stock,
       .align        = TUI_ALIGN_BETWEEN,
       .w_grow       = true,
-      .color.bg     = TUI_COLOR_BLACK,
     });
 
     tui_list_item_add(data->list, (tui_window_t*) item_window);
@@ -1425,11 +1418,6 @@ int main(int argc, char* argv[])
 
   tui_t* tui = tui_create((tui_config_t)
   {
-    .color = (tui_color_t)
-    {
-      .fg = TUI_COLOR_WHITE,
-      .bg = TUI_COLOR_BLACK,
-    },
     .event.key = &tab_event,
   });
 
