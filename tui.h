@@ -3155,6 +3155,11 @@ void tui_start(tui_t* tui)
       break;
     }
 
+    if (key == KEY_RESIZE)
+    {
+      tui_resize(tui);
+    }
+
     tui_event(tui, key);
 
     tui_render(tui);
