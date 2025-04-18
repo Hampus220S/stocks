@@ -1,10 +1,6 @@
 # Notes
 - fix tui_tab_ functions: only is_interact windows can be tabbed to
-- print prices on every second line vertically on left side of chart
-  (0, 0, w:10, h:0) with .has_padding = true
 - problem: spaces in beginning of lines are removed by tui_text_render and tui_text_ws_get
-- problem: old pixels is visable when resizing (windows are not cleared)
-  (fill windows on resize)
 - some futures missing longName, try shortName or just save symbol (don't return error)
   (don't return error on other meta data as well)
 - ESC for leaving chart and going back to list

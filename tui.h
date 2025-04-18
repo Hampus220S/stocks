@@ -488,7 +488,7 @@ void tui_quit(void)
 /*
  * Create ncurses WINDOW* for tui_window_t
  */
-static inline WINDOW* tui_ncurses_window_create(WINDOW* parent, tui_rect_t rect)
+static inline WINDOW* tui_ncurses_window_create(tui_rect_t rect)
 {
   // Can't create window with no size
   if (rect.w == 0 || rect.h == 0)
@@ -496,7 +496,6 @@ static inline WINDOW* tui_ncurses_window_create(WINDOW* parent, tui_rect_t rect)
     return NULL;
   }
 
-  // WINDOW* window = subwin(parent, rect.h, rect.w, rect.y, rect.x);
   WINDOW* window = newwin(rect.h, rect.w, rect.y, rect.x);
 
   if (!window)
@@ -530,7 +529,7 @@ static inline WINDOW* tui_ncurses_window_resize(WINDOW* window, tui_rect_t rect)
 /*
  * Update ncurses WINDOW*, either creating it or resizing it
  */
-static inline WINDOW* tui_ncurses_window_update(WINDOW* parent, WINDOW* window, tui_rect_t rect)
+static inline WINDOW* tui_ncurses_window_update(WINDOW* window, tui_rect_t rect)
 {
   if (window)
   {
@@ -538,7 +537,7 @@ static inline WINDOW* tui_ncurses_window_update(WINDOW* parent, WINDOW* window, 
   }
   else
   {
-    return tui_ncurses_window_create(parent, rect);
+    return tui_ncurses_window_create(rect);
   }
 }
 
@@ -1883,7 +1882,7 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
     child->_rect.y += parent->head._rect.y;
 
-    child->window = tui_ncurses_window_update(parent->head.window, child->window, child->_rect);
+    child->window = tui_ncurses_window_update(child->window, child->_rect);
 
     if (child->type == TUI_WINDOW_PARENT)
     {
@@ -1902,7 +1901,7 @@ static inline void tui_window_rect_calc(tui_window_t* window, int w, int h)
     window->_rect = tui_window_rect_get(window->rect, w, h);
   }
 
-  window->window = tui_ncurses_window_update(stdscr, window->window, window->_rect);
+  window->window = tui_ncurses_window_update(window->window, window->_rect);
 
   if(window->type == TUI_WINDOW_PARENT)
   {
