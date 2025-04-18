@@ -4,7 +4,6 @@
 - some futures missing longName, try shortName or just save symbol (don't return error)
   (don't return error on other meta data as well)
 - ESC for leaving chart and going back to list
-- maybe calculate high and low instead of reading regularMarketDayHigh and Low
 
 ## Duplicate
 - tui_..._window_..._search (only tui_window_t** windows and size_t count is needed)

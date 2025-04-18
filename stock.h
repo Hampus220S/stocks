@@ -35,13 +35,13 @@ typedef struct stock_t
   char*          interval;
   char*          currency;
   int            volume; // Regular Market Volume
-  double         high;   // Regular Market Day High
-  double         low;    // Regular Market Day Low
 
-  int            start;  // Today Start
-  int            end;    // Today End
+  int            start;  // Today Start Time
+  int            end;    // Today End   Time
   double         open;   // Today Open  Price
   double         close;  // Today Close Price
+  double         high;   // Today High  Price
+  double         low;    // Today Low   Price
 
   stock_value_t* values;
   size_t         value_count;
@@ -134,7 +134,7 @@ static inline const char* stock_range_interval_get(const char* range)
 }
 
 /*
- * Calculate stock start, end, open, close for 1 day
+ * Calculate stock start, end, open, close, high and low for 1 day
  */
 static inline int stock_meta_calc(stock_t* stock)
 {
@@ -148,9 +148,15 @@ static inline int stock_meta_calc(stock_t* stock)
   stock->end   = value.time;
   stock->close = value.close;
 
+  stock->high = value.high;
+  stock->low  = value.low;
+
   for (size_t index = stock->value_count; index-- > 0;)
   {
     value = stock->values[index];
+
+    stock->high = MAX(stock->high, value.high);
+    stock->low  = MIN(stock->low,  value.low);
 
     stock->start = value.time;
     stock->open  = value.open;
@@ -462,26 +468,6 @@ static inline int stock_meta_parse(stock_t* stock, struct json_object* result)
   }
 
   stock->exchange = strdup(json_object_get_string(exchange));
-
-
-  struct json_object* high = json_object_object_get(meta, "regularMarketDayHigh");
-
-  if (!high || !json_object_is_type(high, json_type_double))
-  {
-    error_print("Missing 'regularMarketDayHigh' field: %s", stock->symbol);
-  }
-
-  stock->high = json_object_get_double(high);
-
-
-  struct json_object* low = json_object_object_get(meta, "regularMarketDayLow");
-
-  if (!low || !json_object_is_type(low, json_type_double))
-  {
-    error_print("Missing 'regularMarketDayLow' field: %s", stock->symbol);
-  }
-
-  stock->low = json_object_get_double(low);
 
 
   struct json_object* volume = json_object_object_get(meta, "regularMarketVolume");
