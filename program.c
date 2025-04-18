@@ -247,7 +247,7 @@ static void chart_window_cursor_render(tui_window_t* head)
   square->symbol = ' ';
   square->color.bg = color;
 
-  tui_cursor_set(head->tui, head->_rect.x + cursor_x, head->_rect.y + cursor_y);
+  // tui_cursor_set(head->tui, head->_rect.x + cursor_x, head->_rect.y + cursor_y);
 }
 
 /*
@@ -497,6 +497,44 @@ bool chart_window_key(tui_window_t* head, int key)
   }
 
   return false;
+}
+
+/*
+ *
+ */
+void prices_window_update(tui_window_t* head)
+{
+  tui_window_parent_t* window = (tui_window_parent_t*) head;
+
+  stock_data_t* data = head->data;
+
+  if (!data) return;
+
+  stock_t* stock = data->stock;
+
+  if (!stock) return;
+
+  // 1. Free all child windows
+  tui_windows_free(&window->children, &window->child_count);
+
+  int lines = (head->_rect.h - 2) / 2;
+
+  char buffer[64];
+
+  for (int index = 0; index < lines; index++)
+  {
+    double fraction = ((float) ((lines - 1) - index) / (float) (lines - 1));
+
+    double price = fraction * (stock->_high - stock->_low) + stock->_low;
+
+    sprintf(buffer, "%.2f", price);
+
+    tui_parent_child_text_create(window, (tui_window_text_config_t)
+    {
+      .rect = TUI_RECT_NONE,
+      .string = buffer,
+    });
+  }
 }
 
 /*
@@ -790,6 +828,7 @@ void data_window_init(tui_window_t* head)
     .rect = TUI_RECT_NONE,
     .event.init = &data1_window_init,
     .pos = TUI_POS_CENTER,
+    .color.bg = TUI_COLOR_NONE,
   });
 
   tui_parent_child_parent_create(data_window, (tui_window_parent_config_t)
@@ -798,6 +837,7 @@ void data_window_init(tui_window_t* head)
     .rect = TUI_RECT_NONE,
     .event.init = &data2_window_init,
     .pos = TUI_POS_CENTER,
+    .color.bg = TUI_COLOR_NONE,
   });
 
   tui_parent_child_text_create(data_window, (tui_window_text_config_t)
@@ -809,6 +849,7 @@ void data_window_init(tui_window_t* head)
       .h = 1,
     },
     .align = TUI_ALIGN_CENTER,
+    .color.bg = TUI_COLOR_NONE,
   });
 }
 
@@ -829,7 +870,6 @@ void stock_window_init(tui_window_t* head)
 
   tui_window_parent_t* chart_parent = tui_parent_child_parent_create(stock_window, (tui_window_parent_config_t)
   {
-    .name = "chart parent",
     .rect = TUI_RECT_NONE,
     .h_grow = true,
     .w_grow = true,
@@ -842,9 +882,7 @@ void stock_window_init(tui_window_t* head)
 
   tui_window_grid_t* chart_window = tui_parent_child_grid_create(chart_parent, (tui_window_grid_config_t)
   {
-    .name = "chart",
     .rect = TUI_RECT_NONE,
-    .color.bg = TUI_COLOR_CYAN,
     .size = (tui_size_t)
     {
       .w = 20,
@@ -870,12 +908,26 @@ void stock_window_init(tui_window_t* head)
     .align = TUI_ALIGN_CENTER,
   });
 
+  tui_parent_child_parent_create(chart_parent, (tui_window_parent_config_t)
+  {
+    .rect = (tui_rect_t)
+    {
+      .w = 10,
+      .h = 0,
+    },
+    .is_vertical = true,
+    .has_padding = true,
+    .event.update = &prices_window_update,
+    .data = data,
+  });
+
   tui_window_text_t* value_window = tui_parent_child_text_create(stock_window, (tui_window_text_config_t)
   {
     .string = "",
     .rect = TUI_RECT_NONE,
     .event.update = &value_window_update,
     .color.fg = TUI_COLOR_YELLOW,
+    .color.bg = TUI_COLOR_NONE,
     .align = TUI_ALIGN_CENTER,
     .w_grow = true,
     .data = data,

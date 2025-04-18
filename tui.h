@@ -496,7 +496,8 @@ static inline WINDOW* tui_ncurses_window_create(WINDOW* parent, tui_rect_t rect)
     return NULL;
   }
 
-  WINDOW* window = subwin(parent, rect.h, rect.w, rect.y, rect.x);
+  // WINDOW* window = subwin(parent, rect.h, rect.w, rect.y, rect.x);
+  WINDOW* window = newwin(rect.h, rect.w, rect.y, rect.x);
 
   if (!window)
   {
@@ -1135,6 +1136,10 @@ static inline void tui_window_text_render(tui_window_text_t* window)
 {
   tui_window_t* head = &window->head;
 
+  WINDOW* parent = head->parent ? head->parent->head.window : stdscr;
+
+  overwrite(parent, head->window);
+
   head->_color = tui_color_inherit(head->tui, (tui_window_t*) head->parent, head->color);
 
   tui_ncurses_window_color_on(head->window, head->_color);
@@ -1150,7 +1155,7 @@ static inline void tui_window_text_render(tui_window_text_t* window)
     tui_text_render(window);
   }
 
-  wnoutrefresh(head->window);
+  overwrite(head->window, parent);
 }
 
 /*
@@ -1159,6 +1164,10 @@ static inline void tui_window_text_render(tui_window_text_t* window)
 static inline void tui_window_grid_render(tui_window_grid_t* window)
 {
   tui_window_t* head = &window->head;
+
+  WINDOW* parent = head->parent ? head->parent->head.window : stdscr;
+
+  overwrite(parent, head->window);
 
   head->_color = tui_color_inherit(head->tui, (tui_window_t*) head->parent, head->color);
 
@@ -1196,7 +1205,7 @@ static inline void tui_window_grid_render(tui_window_grid_t* window)
     }
   }
 
-  wnoutrefresh(head->window);
+  overwrite(head->window, parent);
 }
 
 static inline void tui_window_render(tui_window_t* window);
@@ -1207,6 +1216,10 @@ static inline void tui_window_render(tui_window_t* window);
 static inline void tui_window_parent_render(tui_window_parent_t* window)
 {
   tui_window_t* head = &window->head;
+
+  WINDOW* parent = head->parent ? head->parent->head.window : stdscr;
+
+  overwrite(parent, head->window);
 
   head->_color = tui_color_inherit(head->tui, (tui_window_t*) head->parent, head->color);
 
@@ -1220,13 +1233,13 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
   // Draw border
   tui_border_draw(window);
 
-  wnoutrefresh(head->window);
-
   // Render children
   for (size_t index = 0; index < window->child_count; index++)
   {
     tui_window_render(window->children[index]);
   }
+  
+  overwrite(head->window, parent);
 }
 
 /*
@@ -2007,8 +2020,6 @@ void tui_render(tui_t* tui)
 
   tui_resize(tui);
 
-  // erase();
-
   tui_menu_t* menu = tui->menu;
 
   if (menu)
@@ -2024,10 +2035,6 @@ void tui_render(tui_t* tui)
 
   tui_ncurses_window_fill(stdscr);
 
-  // refresh();
-
-  wnoutrefresh(stdscr);
-  
   // 3. Render tui windows
   tui_windows_render(tui->windows, tui->window_count);
 
@@ -2040,7 +2047,7 @@ void tui_render(tui_t* tui)
   // Render the active window over all other windows
   if (tui->window)
   {
-    tui_window_render(tui->window);
+    // tui_window_render(tui->window);
   }
 
   tui_cursor_t cursor = tui->cursor;
@@ -2055,8 +2062,6 @@ void tui_render(tui_t* tui)
       curs_set(1);
     }
   }
-
-  doupdate();
 }
 
 /*
