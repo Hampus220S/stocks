@@ -414,15 +414,15 @@ void tui_border_draw(tui_window_parent_t* window)
   if (!border.is_active) return;
 
 
-  tui_window_t head = window->head;
+  tui_window_t* head = &window->head;
 
-  tui_color_t color = tui_color_inherit(head.tui, (tui_window_t*) window, border.color);
+  tui_color_t color = tui_color_inherit(head->tui, (tui_window_t*) window, border.color);
 
-  tui_ncurses_window_color_on(head.window, color);
+  tui_ncurses_window_color_on(head->window, color);
 
-  box(head.window, 0, 0);
+  box(head->window, 0, 0);
 
-  tui_ncurses_window_color_off(head.window, color);
+  tui_ncurses_window_color_off(head->window, color);
 }
 
 /*
@@ -1014,9 +1014,9 @@ static inline void tui_string_ansi_handle(tui_window_t* window, char* ansi, int 
  */
 static inline void tui_text_render(tui_window_text_t* window)
 {
-  tui_window_t head = window->head;
+  tui_window_t* head = &window->head;
 
-  tui_rect_t rect = head._rect;
+  tui_rect_t rect = head->_rect;
 
   int h = tui_text_h_get(window->text, rect.w);
 
@@ -1031,7 +1031,7 @@ static inline void tui_text_render(tui_window_text_t* window)
   tui_text_ws_get(ws, window->text, h);
 
   // Store temporary color of letters
-  tui_color_t color = head._color;
+  tui_color_t color = head->_color;
 
   int x = 0;
   int y = 0;
@@ -1078,7 +1078,7 @@ static inline void tui_text_render(tui_window_text_t* window)
           letter = '*';
         }
 
-        mvwaddch(head.window, y_shift + y, x_shift + x, letter);
+        mvwaddch(head->window, y_shift + y, x_shift + x, letter);
       }
 
       x++;
@@ -1135,8 +1135,6 @@ static inline void tui_window_text_render(tui_window_text_t* window)
 {
   tui_window_t* head = &window->head;
 
-  // werase(head.window);
-
   head->_color = tui_color_inherit(head->tui, (tui_window_t*) head->parent, head->color);
 
   tui_ncurses_window_color_on(head->window, head->_color);
@@ -1152,17 +1150,7 @@ static inline void tui_window_text_render(tui_window_text_t* window)
     tui_text_render(window);
   }
 
-  // wrefresh(head.window);
-
-  /*
-  WINDOW* parent = head->parent ? head->parent->head.window : stdscr;
-
-  wnoutrefresh(parent);
-  */
-
   wnoutrefresh(head->window);
-
-  // doupdate();
 }
 
 /*
@@ -1171,8 +1159,6 @@ static inline void tui_window_text_render(tui_window_text_t* window)
 static inline void tui_window_grid_render(tui_window_grid_t* window)
 {
   tui_window_t* head = &window->head;
-
-  // werase(head.window);
 
   head->_color = tui_color_inherit(head->tui, (tui_window_t*) head->parent, head->color);
 
@@ -1210,17 +1196,7 @@ static inline void tui_window_grid_render(tui_window_grid_t* window)
     }
   }
 
-  // wrefresh(head.window);
-
-  /*
-  WINDOW* parent = head->parent ? head->parent->head->window : stdscr;
-
-  wnoutrefresh(parent);
-  */
-
   wnoutrefresh(head->window);
-
-  // doupdate();
 }
 
 static inline void tui_window_render(tui_window_t* window);
@@ -1231,8 +1207,6 @@ static inline void tui_window_render(tui_window_t* window);
 static inline void tui_window_parent_render(tui_window_parent_t* window)
 {
   tui_window_t* head = &window->head;
-
-  // werase(head.window);
 
   head->_color = tui_color_inherit(head->tui, (tui_window_t*) head->parent, head->color);
 
@@ -1246,17 +1220,7 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
   // Draw border
   tui_border_draw(window);
 
-  // wrefresh(head.window);
-
-  /*
-  WINDOW* parent = head.parent ? head.parent->head.window : stdscr;
-
-  wnoutrefresh(parent);
-  */
-
   wnoutrefresh(head->window);
-  
-  // doupdate();
 
   // Render children
   for (size_t index = 0; index < window->child_count; index++)

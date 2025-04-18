@@ -3,16 +3,6 @@
 - print prices on every second line vertically on left side of chart
   (0, 0, w:10, h:0) with .has_padding = true
 - print titles of every window border
-- when extracting head from window: tui_window_t* head = &window->head;
-
-## Flickering and layering
-Insight: erase functions cause flickering
-Insight: without erase (or other clearing) old text and content is still visable
-- fix flickering screen
-- don't fill window if background color is TUI_COLOR_NONE
-  (title on border removes the border right now)
-
-## Maybe
 
 ## Duplicate
 - tui_..._window_..._search (only tui_window_t** windows and size_t count is needed)
