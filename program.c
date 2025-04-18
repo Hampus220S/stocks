@@ -313,7 +313,8 @@ void chart_window_line_render(tui_window_t* head)
       int upper = MIN(y, next_y);
       int lower = MAX(y, next_y);
 
-      for (y = upper; y < lower; y++)
+      // From one below upper square to one over lower square
+      for (y = upper + 1; y <= lower - 1; y++)
       {
         tui_window_grid_square_set(window, x, y, (tui_window_grid_square_t)
         {
