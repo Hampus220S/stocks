@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Stocks
+Path=/home/hampus/Documents/Programming/stocks
+Exec=gnome-terminal --window --full-screen -- bash -c './stocks'
+Icon=/home/hampus/Documents/Programming/stocks/icon.png
+Terminal=false
+Type=Application
+Categories=Utility;
