@@ -4,6 +4,12 @@
  * Written by Hampus Fridholm
  *
  * Last updated: 2025-04-20
+ *
+ * https://curl.se/libcurl/c/simple.html
+ *
+ * https://github.com/json-c/json-c
+ *
+ * https://stackoverflow.com/questions/61976027/scraping-yahoo-finance-at-regular-intervals
  */
 
 #ifndef STOCK_H
