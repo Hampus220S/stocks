@@ -2,6 +2,8 @@
  * stock.h - fetch stock data
  *
  * Written by Hampus Fridholm
+ *
+ * Last updated: 2025-04-20
  */
 
 #ifndef STOCK_H

@@ -3,9 +3,7 @@
  *
  * Written by Hampus Fridholm
  *
- * Last updated: 2025-04-08
- *
- * This library depends on debug.h
+ * Last updated: 2025-04-20
  */
 
 #ifndef TUI_H
@@ -2123,7 +2121,7 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
 }
 
 /*
- *
+ * Set string of text window to copy of specified string
  */
 void tui_window_text_string_set(tui_window_text_t* window, char* string)
 {

@@ -1,4 +1,5 @@
 # Notes
+- rename repository to "stocks" and program.c to stocks.c
 
 ## Duplicate
 - tui_..._window_..._search (only tui_window_t** windows and size_t count is needed)

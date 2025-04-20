@@ -1,5 +1,7 @@
 /*
  * program.c
+ *
+ * Written by Hampus Fridholm
  */
 
 #define TUI_IMPLEMENT
@@ -11,6 +13,9 @@
 #define STOCK_IMPLEMENT
 #include "stock.h"
 
+/*
+ * Handle forward tab and backward tab event
+ */
 bool tab_event(tui_t* tui, int key)
 {
   switch (key)
@@ -29,7 +34,7 @@ bool tab_event(tui_t* tui, int key)
 }
 
 /*
- *
+ * Generic enter event for parent, enter first child window
  */
 void parent_window_enter(tui_window_t* head)
 {
@@ -42,31 +47,7 @@ void parent_window_enter(tui_window_t* head)
 }
 
 /*
- *
- */
-void list_search_enter(tui_window_t* window)
-{
-  tui_input_t* input = window->data;
-
-  input->cursor = input->buffer_len;
-
-  tui_input_string_update(input);
-}
-
-/*
- *
- */
-void list_search_exit(tui_window_t* window)
-{
-  tui_input_t* input = window->data;
-
-  input->cursor = input->buffer_len;
-
-  tui_input_string_update(input);
-}
-
-/*
- *
+ * Enter event for item window, make border yellow
  */
 void item_window_enter(tui_window_t* head)
 {
@@ -76,7 +57,7 @@ void item_window_enter(tui_window_t* head)
 }
 
 /*
- *
+ * Exit event for item window, hide border
  */
 void item_window_exit(tui_window_t* head)
 {
@@ -86,7 +67,7 @@ void item_window_exit(tui_window_t* head)
 }
 
 /*
- *
+ * Data for stocks window
  */
 typedef struct stocks_data_t
 {
@@ -96,7 +77,7 @@ typedef struct stocks_data_t
 } stocks_data_t;
 
 /*
- *
+ * Free function for stocks data
  */
 void stocks_window_free(tui_window_t* window)
 {
@@ -112,7 +93,7 @@ void stocks_window_free(tui_window_t* window)
 }
 
 /*
- *
+ * Enter event for stocks window, enter current item window
  */
 void stocks_window_enter(tui_window_t* window)
 {
@@ -129,7 +110,7 @@ void stocks_window_enter(tui_window_t* window)
 }
 
 /*
- *
+ * Keypress handler for stocks window, handle item list and search input
  */
 bool stocks_window_key(tui_window_t* head, int key)
 {
@@ -188,7 +169,7 @@ typedef struct stock_data_t
 } stock_data_t;
 
 /*
- *
+ * Free function for stock data
  */
 void stock_window_free(tui_window_t* head)
 {
@@ -246,12 +227,10 @@ static void chart_window_cursor_render(tui_window_t* head)
 
   square->symbol = ' ';
   square->color.bg = color;
-
-  // tui_cursor_set(head->tui, head->_rect.x + cursor_x, head->_rect.y + cursor_y);
 }
 
 /*
- *
+ * Render line chart
  */
 void chart_window_line_render(tui_window_t* head)
 {
@@ -331,7 +310,7 @@ void chart_window_line_render(tui_window_t* head)
 }
 
 /*
- *
+ * Render candlestick chart
  */
 void chart_window_candle_render(tui_window_t* head)
 {
@@ -513,7 +492,7 @@ bool chart_window_key(tui_window_t* head, int key)
 }
 
 /*
- *
+ * Update event for prices window, resize height and update prices
  */
 void prices_window_update(tui_window_t* head)
 {
@@ -969,7 +948,7 @@ void stock_window_init(tui_window_t* head)
 }
 
 /*
- *
+ * Keypress handler for item window, enter will show chart of stock
  */
 bool item_window_key(tui_window_t* head, int key)
 {
@@ -1020,7 +999,7 @@ bool item_window_key(tui_window_t* head, int key)
 }
 
 /*
- *
+ * Free function for item window stock object
  */
 void item_window_free(tui_window_t* head)
 {
@@ -1031,7 +1010,7 @@ void item_window_free(tui_window_t* head)
 }
 
 /*
- *
+ * Render item window, white border when viewing it's chart
  */
 void item_window_render(tui_window_t* head)
 {
@@ -1057,7 +1036,7 @@ void item_window_render(tui_window_t* head)
 }
 
 /*
- *
+ * Update item window, rendering stock symbol and stock price
  */
 void item_window_update(tui_window_t* head)
 {
@@ -1093,7 +1072,7 @@ void item_window_update(tui_window_t* head)
 }
 
 /*
- *
+ * Initialize item window, creating symbol and value child windows
  */
 void item_window_init(tui_window_t* head)
 {
@@ -1107,7 +1086,6 @@ void item_window_init(tui_window_t* head)
   {
     .name = "symbol",
     .rect = TUI_RECT_NONE,
-    .string = "Tjoho",
     .align = TUI_ALIGN_START,
   });
 
@@ -1115,13 +1093,12 @@ void item_window_init(tui_window_t* head)
   {
     .name = "value",
     .rect = TUI_RECT_NONE,
-    .string = "Hejsan",
     .align = TUI_ALIGN_END,
   });
 }
 
 /*
- *
+ * Initialize list window, creating item windows for default stocks
  */
 void list_window_init(tui_window_t* head)
 {
@@ -1183,7 +1160,7 @@ void list_window_init(tui_window_t* head)
 }
 
 /*
- *
+ * Enter event for search window, make border yellow
  */
 void search_window_enter(tui_window_t* head)
 {
@@ -1193,7 +1170,7 @@ void search_window_enter(tui_window_t* head)
 }
 
 /*
- *
+ * Exit event for search window, make border white again
  */
 void search_window_exit(tui_window_t* head)
 {
@@ -1203,7 +1180,7 @@ void search_window_exit(tui_window_t* head)
 }
 
 /*
- *
+ * Keypress handler for search window, on enter view inputted stock's chart
  */
 bool search_window_key(tui_window_t* head, int key)
 {
@@ -1266,7 +1243,7 @@ bool search_window_key(tui_window_t* head, int key)
 }
 
 /*
- *
+ * Update search window by rendering inputted text
  */
 void search_window_update(tui_window_t* head)
 {
@@ -1281,7 +1258,7 @@ void search_window_update(tui_window_t* head)
 }
 
 /*
- *
+ * Initialize search window, create inputted text window
  */
 void search_window_init(tui_window_t* head)
 {
@@ -1312,7 +1289,7 @@ void search_window_init(tui_window_t* head)
 }
 
 /*
- *
+ * Initialize stocks window, create list window and search window
  */
 void stocks_window_init(tui_window_t* head)
 {
