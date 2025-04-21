@@ -509,7 +509,7 @@ void prices_window_update(tui_window_t* head)
   // 1. Free all child windows
   tui_windows_free(&window->children, &window->child_count);
 
-  int lines = (head->_rect.h - 2) / 2;
+  int lines = (head->_rect.h - 1) / 2;
 
   char buffer[64];
 
