@@ -22,21 +22,27 @@ You are not limited to monitor the listed stocks, you can also *search* for whic
 
 If you want to view the chart in more detail, you can make the resolution of the window higher, by pressing **CTRL `+`**. To make the resolution lower, you press **CTRL `-`**. There is no *fullscreen* mode for now.
 
+Moving between windows is done either using the **arrow keys**, or by pressing **TAB** to move forward and **SHIFT + TAB** to move backward. When you are viewing the chart, pressing **ESC** will take you back to the list of stocks.
+
+To close the program, just press **CTRL+C**
+
 ## Install
 
-To install *stocks*, first install the necessary apt packages. Curl and JSON is needed for retrieving the data from Yahoo Finance. Ncurses is the library used to create the terminal user interface.
+To install the stocks program, first you must install the necessary apt packages. Curl and JSON is needed for retrieving the data from Yahoo Finance. Ncurses is the library used to create the terminal user interface.
 
 ```bash
 sudo apt install libjson-c-dev libcurl4-openssl-dev libncurses-dev
 ```
 
-After installing the apt packages, you can make the *stocks* program using the makefile.
+After installing the apt packages, you can make the `stocks` program using the makefile.
 
 ```bash
 make
 ```
 
-Now, the **stocks** program is available as an executable program, only accessable from this repo. If you want to make it accessable from anywhere on the computer, you can add the path to this repo in your `.bashrc` and resource it.
+Now, the stocks program is available as an executable program, only accessable from this repo. If you want to make it accessable from anywhere on the computer, you can add the path to this repo in your `.bashrc` and resource it.
+
+![Icon](icon.png)
 
 Alternetivly, you can create a desktop application by filling in the full path to this repo in the `stocks.desktop` file and add it to `~/.local/share/applications/` for the local user, or `/usr/share/applications/` for all users. Either copy the file into one of these directories or create a symlink with:
 
