@@ -1,8 +1,8 @@
 [Desktop Entry]
 Name=Stocks
-Path=/home/hampus/Documents/Programming/stocks
+Path=/full/path/to/repo
 Exec=gnome-terminal --window --full-screen -- bash -c './stocks'
-Icon=/home/hampus/Documents/Programming/stocks/icon.png
+Icon=/full/path/to/repo/icon.png
 Terminal=false
 Type=Application
 Categories=Utility;

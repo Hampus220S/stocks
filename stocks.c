@@ -1,5 +1,5 @@
 /*
- * stocks.c - stocks monitor
+ * stocks.c - stock monitor
  *
  * Written by Hampus Fridholm
  */
