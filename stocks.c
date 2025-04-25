@@ -492,6 +492,24 @@ bool chart_window_key(tui_window_t* head, int key)
 }
 
 /*
+ * Update event for range window, update range string
+ */
+void range_window_update(tui_window_t* head)
+{
+  tui_window_text_t* window = (tui_window_text_t*) head;
+
+  stock_data_t* data = head->data;
+
+  if (!data) return;
+
+  stock_t* stock = data->stock;
+
+  if (!stock) return;
+
+  tui_window_text_string_set(window, stock->range);
+}
+
+/*
  * Update event for prices window, resize height and update prices
  */
 void prices_window_update(tui_window_t* head)
@@ -914,6 +932,20 @@ void stock_window_init(tui_window_t* head)
     .is_vertical = true,
     .has_padding = true,
     .event.update = &prices_window_update,
+    .data = data,
+  });
+
+  tui_parent_child_text_create(chart_parent, (tui_window_text_config_t)
+  {
+    .rect = (tui_rect_t)
+    {
+      .w = -1,
+      .h = 1,
+      .y = 1,
+    },
+    .align = TUI_ALIGN_END,
+    .color.fg = TUI_COLOR_WHITE,
+    .event.update = &range_window_update,
     .data = data,
   });
 
