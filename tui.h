@@ -284,6 +284,7 @@ typedef struct tui_window_parent_t
   bool           is_vertical;
   tui_border_t   border;
   bool           has_padding;
+  bool           has_gap;
   tui_pos_t      pos;
   tui_align_t    align;
 } tui_window_parent_t;
@@ -1409,20 +1410,22 @@ static inline void tui_window_parent_size_calc(tui_window_parent_t* parent)
       }
     }
 
-    if (parent->has_padding)
+    if (parent->has_gap)
     {
       if (parent->is_vertical)
       {
-        align_size.h += (align_count + 1);
-
-        align_size.w += 4;
+        align_size.h += (align_count - 1) * 1;
       }
       else
       {
-        align_size.w += (align_count + 1) * 2;
-
-        align_size.h += 2;
+        align_size.w += (align_count - 1) * 2;
       }
+    }
+
+    if (parent->has_padding)
+    {
+      align_size.w += 4;
+      align_size.h += 2;
     }
 
     if (parent->border.is_active)
@@ -1538,7 +1541,7 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
 
   if (child->h_grow)
   {
-    if (parent->has_padding)
+    if (parent->has_gap)
     {
       // Add this gap after current child
       h_gap += 1;
@@ -1562,7 +1565,7 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
   // If other children is grown, but not this one
   else if (grow_count > 0)
   {
-    if (parent->has_padding)
+    if (parent->has_gap)
     {
       // Add this gap after current child
       h_gap += 1;
@@ -1599,14 +1602,14 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
     if (*align_index == 0) // First child to align
     {
       // Add this gap before current child
-      if (parent->has_padding)
+      if (parent->has_gap)
       {
         h_space = MAX(0, h_space - (align_count - 1) * 1); 
       }
 
       rect->y += (float) parent->align / 2.f * h_space;
     }
-    else if (parent->has_padding)
+    else if (parent->has_gap)
     {
       // Add this gap after current child
       h_gap += 1;
@@ -1648,7 +1651,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
 
   if (child->w_grow)
   {
-    if (parent->has_padding)
+    if (parent->has_gap)
     {
       // Add this gap after current child
       w_gap += 2;
@@ -1671,7 +1674,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
   // If other children is grown, but not this one
   else if (grow_count > 0)
   {
-    if (parent->has_padding)
+    if (parent->has_gap)
     {
       // Add this gap after current child
       w_gap += 1;
@@ -1708,7 +1711,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
     if (*align_index == 0) // First child to align
     {
       // Add this gap before current child
-      if (parent->has_padding)
+      if (parent->has_gap)
       {
         // Remove all space between windows 
         // not including padding around the border
@@ -1717,7 +1720,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
 
       rect->x += (float) parent->align / 2.f * w_space;
     }
-    else if (parent->has_padding)
+    else if (parent->has_gap)
     {
       // Add this gap after current child
       w_gap += 2;
@@ -2040,12 +2043,6 @@ void tui_render(tui_t* tui)
     tui_windows_render(menu->windows, menu->window_count);
   }
 
-  // Render the active window over all other windows
-  if (tui->window)
-  {
-    // tui_window_render(tui->window);
-  }
-
   tui_cursor_t cursor = tui->cursor;
 
   if (cursor.is_active)
@@ -2075,6 +2072,7 @@ typedef struct tui_window_parent_config_t
   bool               is_interact;
   tui_border_t       border;
   bool               has_padding;
+  bool               has_gap;
   tui_pos_t          pos;
   tui_align_t        align;
   bool               is_vertical;
@@ -2114,6 +2112,7 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
   {
     .head        = head,
     .has_padding = config.has_padding,
+    .has_gap     = config.has_gap,
     .border      = config.border,
     .pos         = config.pos,
     .align       = config.align,

@@ -920,6 +920,7 @@ void stock_window_init(tui_window_t* head)
     },
     .is_vertical = true,
     .has_padding = true,
+    .has_gap     = true,
     .event.update = &prices_window_update,
     .data = data,
   });
@@ -962,6 +963,7 @@ void stock_window_init(tui_window_t* head)
     .color.fg = TUI_COLOR_WHITE,
     .event.init = &data_window_init,
     .has_padding = true,
+    .has_gap     = true,
     .data = data,
     .align = TUI_ALIGN_CENTER,
     .w_grow = true,
@@ -1200,7 +1202,6 @@ void list_window_init(tui_window_t* head)
       {
         .is_active  = true,
       },
-      .has_padding  = false,
       .event.init   = &item_window_init,
       .event.free   = &item_window_free,
       .event.enter  = &item_window_enter,
@@ -1384,7 +1385,6 @@ void stocks_window_init(tui_window_t* head)
     .event.key    = &search_window_key,
     .event.enter  = &search_window_enter,
     .event.exit   = &search_window_exit,
-    .has_padding  = false,
     .w_grow       = true,
     .border       = (tui_border_t)
     {
@@ -1403,7 +1403,6 @@ void stocks_window_init(tui_window_t* head)
     .event.key   = &list_window_key,
     .event.enter = &list_window_enter,
     .is_vertical = true,
-    .has_padding = false,
     .h_grow      = true,
     .border      = (tui_border_t)
     {
@@ -1430,9 +1429,9 @@ void root_window_init(tui_window_t* head)
     .event.free  = &stocks_window_free,
     .event.key   = &stocks_window_key,
     .is_vertical = true,
-    .has_padding = false,
     .h_grow      = true,
     .is_interact = true,
+    .has_gap     = true,
   });
 
   tui_parent_child_parent_create(root_window, (tui_window_parent_config_t)
@@ -1461,6 +1460,7 @@ void menu_init(tui_menu_t* menu)
     .event.enter = &parent_window_enter,
     .event.init  = &root_window_init,
     .has_padding = true,
+    .has_gap     = true,
   });
 }
 
