@@ -168,6 +168,8 @@ typedef enum tui_window_type_t
 
 /*
  * Window struct
+ *
+ * is_contain window can't be the largest child in parent
  */
 typedef struct tui_window_t
 {
@@ -175,6 +177,7 @@ typedef struct tui_window_t
   char*                name;
   bool                 is_hidden;
   bool                 is_interact;
+  bool                 is_contain;
   bool                 w_grow;
   bool                 h_grow;
   tui_rect_t           rect;
@@ -1384,8 +1387,11 @@ static inline void tui_window_parent_size_calc(tui_window_parent_t* parent)
     {
       tui_window_t* child = parent->children[index];
 
-      max_size.w = MAX(max_size.w, child->_rect.w);
-      max_size.h = MAX(max_size.h, child->_rect.h);
+      if (!child->is_contain)
+      {
+        max_size.w = MAX(max_size.w, child->_rect.w);
+        max_size.h = MAX(max_size.h, child->_rect.h);
+      }
 
       if (!child->rect.is_none)
       {
@@ -1398,7 +1404,10 @@ static inline void tui_window_parent_size_calc(tui_window_parent_t* parent)
 
         align_size.h += child->_rect.h;
 
-        align_size.w = MAX(align_size.w, child->_rect.w);
+        if (!child->is_contain)
+        {
+          align_size.w = MAX(align_size.w, child->_rect.w);
+        }
       }
       else
       {
@@ -1406,7 +1415,10 @@ static inline void tui_window_parent_size_calc(tui_window_parent_t* parent)
 
         align_size.w += child->_rect.w;
 
-        align_size.h = MAX(align_size.h, child->_rect.h);
+        if (!child->is_contain)
+        {
+          align_size.h = MAX(align_size.h, child->_rect.h);
+        }
       }
     }
 
@@ -1520,6 +1532,32 @@ static inline int tui_child_x_get(tui_window_parent_t* parent)
 }
 
 /*
+ * Get w of vertically aligned child
+ */
+static inline int tui_child_w_get(tui_window_t* child, int max_w)
+{
+  if (child->is_contain || child->w_grow)
+  {
+    return max_w;
+  }
+
+  return MIN(max_w, child->_rect.w);
+}
+
+/*
+ * Get h of horizontally aligned child
+ */
+static inline int tui_child_h_get(tui_window_t* child, int max_h)
+{
+  if (child->is_contain || child->h_grow)
+  {
+    return max_h;
+  }
+
+  return MIN(max_h, child->_rect.h);
+}
+
+/*
  * Calculate rect of vertically aligned child
  *
  * align_count and align_index must be int, because they are used in integer arithmetic
@@ -1621,7 +1659,15 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
     rect->y += last_child->_rect.h + h_gap;
   }
 
-  int w = child->w_grow ? max_size.w : child->_rect.w;
+  int w = tui_child_w_get(child, max_size.w);
+
+  // If there is no space left for child, use what space is left
+  int end_y = tui_child_y_get(parent);
+
+  if (rect->y + h > max_size.h + end_y)
+  {
+    h = max_size.h + end_y - rect->y;
+  }
 
   rect->w = w;
   rect->h = h;
@@ -1732,7 +1778,15 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
     rect->x += last_child->_rect.w + w_gap;
   }
 
-  int h = child->h_grow ? max_size.h : child->_rect.h;
+  int h = tui_child_h_get(child, max_size.h);
+
+  // If there is no space left for child, use what space is left
+  int end_x = tui_child_x_get(parent);
+
+  if (rect->x + w > max_size.w + end_x)
+  {
+    w = max_size.w + end_x - rect->x;
+  }
 
   rect->w = w;
   rect->h = h;
@@ -2070,6 +2124,7 @@ typedef struct tui_window_parent_config_t
   tui_color_t        color;
   bool               is_hidden;
   bool               is_interact;
+  bool               is_contain;
   tui_border_t       border;
   bool               has_padding;
   bool               has_gap;
@@ -2102,6 +2157,7 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
     .h_grow      = config.h_grow,
     .is_hidden   = config.is_hidden,
     .is_interact = config.is_interact,
+    .is_contain  = config.is_contain,
     .color       = config.color,
     .event       = config.event,
     .data        = config.data,
@@ -2162,6 +2218,7 @@ typedef struct tui_window_text_config_t
   tui_color_t        color;
   bool               is_hidden;
   bool               is_interact;
+  bool               is_contain;
   char*              string;
   bool               is_secret;
   tui_pos_t          pos;
@@ -2192,6 +2249,7 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_
     .h_grow      = config.h_grow,
     .is_hidden   = config.is_hidden,
     .is_interact = config.is_interact,
+    .is_contain  = config.is_contain,
     .color       = config.color,
     .event       = config.event,
     .data        = config.data,
@@ -2226,6 +2284,7 @@ typedef struct tui_window_grid_config_t
   tui_color_t        color;
   bool               is_hidden;
   bool               is_interact;
+  bool               is_contain;
   tui_size_t         size;
   void*              data;
 } tui_window_grid_config_t;
@@ -2283,6 +2342,7 @@ static inline tui_window_grid_t* _tui_window_grid_create(tui_t* tui, tui_window_
     .h_grow      = config.h_grow,
     .is_hidden   = config.is_hidden,
     .is_interact = config.is_interact,
+    .is_contain  = config.is_contain,
     .color       = config.color,
     .event       = config.event,
     .data        = config.data,
@@ -3198,8 +3258,6 @@ static bool tui_windows_tab_forward(tui_t* tui, tui_window_t** windows, size_t c
 
     if (!window->is_hidden && window->is_interact)
     {
-      // info_print("Found tab window (%s)", window->name);
-
       tui_window_set(tui, window);
 
       return true;
@@ -3579,8 +3637,6 @@ int tui_menu_window_search_set(tui_menu_t* menu, char* search)
   {
     return 1;
   }
-
-  info_print("window: %s", window->name);
 
   tui_window_set(menu->tui, window);
 

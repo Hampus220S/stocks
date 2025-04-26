@@ -6,7 +6,7 @@
 - align '=' in stocks.c
 - replace 0 with TUI_PARENT_SIZE in stocks.c
 - make chart display graph all the way to the left and the bottom
-- create is_contained attribute to tui_window_t
+- fix: search text disappears when it is too long to print (tui_text_render h -> 0)
 
 ## Duplicate
 - tui_..._window_..._search (only tui_window_t** windows and size_t count is needed)

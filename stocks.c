@@ -495,7 +495,11 @@ void range_window_update(tui_window_t* head)
 
   if (!stock) return;
 
-  tui_window_text_string_set(window, stock->range);
+  char buffer[16];
+
+  sprintf(buffer, "%s ", stock->range);
+
+  tui_window_text_string_set(window, buffer);
 }
 
 /*
@@ -526,7 +530,7 @@ void prices_window_update(tui_window_t* head)
 
     double price = fraction * (stock->_high - stock->_low) + stock->_low;
 
-    sprintf(buffer, "%.2f", price);
+    sprintf(buffer, " %.2f", price);
 
     tui_parent_child_text_create(window, (tui_window_text_config_t)
     {
@@ -877,23 +881,13 @@ void chart_prices_init(tui_window_t* head)
 
   stock_data_t* data = head->data;
 
-  tui_window_parent_t* prices_parent = tui_parent_child_parent_create(chart_prices, (tui_window_parent_config_t)
+  tui_parent_child_parent_create(chart_prices, (tui_window_parent_config_t)
   {
     .rect = TUI_RECT_NONE,
     .h_grow = true,
-    .color.bg = TUI_COLOR_CYAN,
-  });
-
-  tui_parent_child_parent_create(prices_parent, (tui_window_parent_config_t)
-  {
-    .rect = (tui_rect_t)
-    {
-      .x = 1,
-      .w = 10,
-      .h = TUI_PARENT_SIZE,
-    },
     .is_vertical = true,
     .has_gap     = true,
+    .is_contain = true,
     .event.update = &prices_window_update,
     .data = data,
   });
@@ -950,7 +944,7 @@ void chart_parent_init(tui_window_t* head)
     .rect = (tui_rect_t)
     {
       .y = 1,
-      .w = -2,
+      .w = -1,
       .h = 1,
     },
     .align = TUI_ALIGN_END,
@@ -1436,6 +1430,7 @@ void stocks_window_init(tui_window_t* head)
     .event.enter  = &search_window_enter,
     .event.exit   = &search_window_exit,
     .w_grow       = true,
+    .is_contain   = true,
     .border       = (tui_border_t)
     {
       .is_active  = true,
