@@ -135,17 +135,6 @@ bool stocks_window_key(tui_window_t* head, int key)
     return true;
   }
 
-  tui_list_t* list = data->list;
-
-  if (tui_list_event(list, key))
-  {
-    tui_window_t* child = list->items[list->item_index];
-
-    tui_window_set(head->tui, child);
-
-    return true;
-  }
-
   return false;
 }
 
@@ -939,9 +928,9 @@ void stock_window_init(tui_window_t* head)
   {
     .rect = (tui_rect_t)
     {
-      .w = -1,
-      .h = 1,
       .y = 1,
+      .w = -2,
+      .h = 1,
     },
     .align = TUI_ALIGN_END,
     .color.fg = TUI_COLOR_WHITE,
@@ -1127,6 +1116,54 @@ void item_window_init(tui_window_t* head)
     .rect = TUI_RECT_NONE,
     .align = TUI_ALIGN_END,
   });
+}
+
+/*
+ * Enter event for list window, enter current item window
+ */
+void list_window_enter(tui_window_t* head)
+{
+  stocks_data_t* data = head->data;
+
+  if (!data) return;
+
+  tui_list_t* list = data->list;
+
+  if (list && list->item_count > 0)
+  {
+    tui_window_set(head->tui, list->items[list->item_index]);
+  }
+}
+
+/*
+ * Keypress handler for list window, scroll between items
+ */
+bool list_window_key(tui_window_t* head, int key)
+{
+  stocks_data_t* data = head->data;
+
+  if (!data)
+  {
+    return false;
+  }
+
+  tui_list_t* list = data->list;
+
+  if (!list)
+  {
+    return false;
+  }
+
+  if (tui_list_event(list, key))
+  {
+    tui_window_t* child = list->items[list->item_index];
+
+    tui_window_set(head->tui, child);
+
+    return true;
+  }
+
+  return false;
 }
 
 /*
@@ -1337,24 +1374,7 @@ void stocks_window_init(tui_window_t* head)
 
   data->list  = tui_list_create(head->tui, stocks_window->is_vertical);
 
-
   tui_parent_child_parent_create(stocks_window, (tui_window_parent_config_t)
-  {
-    .name        = "list",
-    .rect        = TUI_RECT_NONE,
-    .data        = data,
-    .event.init  = &list_window_init,
-    .is_vertical = true,
-    .has_padding = false,
-    .h_grow      = true,
-    .border      = (tui_border_t)
-    {
-      .is_active = true,
-      .color.fg  = TUI_COLOR_WHITE,
-    },
-  });
-
-  tui_window_parent_t* search_window = tui_parent_child_parent_create(stocks_window, (tui_window_parent_config_t)
   {
     .name         = "search",
     .rect         = TUI_RECT_NONE,
@@ -1371,9 +1391,27 @@ void stocks_window_init(tui_window_t* head)
       .is_active  = true,
       .color.fg   = TUI_COLOR_WHITE,
     },
+    .is_interact = true,
   });
 
-  tui_list_item_add(data->list, (tui_window_t*) search_window);
+  tui_parent_child_parent_create(stocks_window, (tui_window_parent_config_t)
+  {
+    .name        = "list",
+    .rect        = TUI_RECT_NONE,
+    .data        = data,
+    .event.init  = &list_window_init,
+    .event.key   = &list_window_key,
+    .event.enter = &list_window_enter,
+    .is_vertical = true,
+    .has_padding = false,
+    .h_grow      = true,
+    .border      = (tui_border_t)
+    {
+      .is_active = true,
+      .color.fg  = TUI_COLOR_WHITE,
+    },
+    .is_interact = true,
+  });
 }
 
 /*
@@ -1459,7 +1497,8 @@ int main(int argc, char* argv[])
     .has_padding = true,
   });
 
-  tui_menu_set(tui, menu);
+  // Set list window as the active window
+  tui_menu_window_search_set(menu, "root stocks list");
 
   info_print("Starting tui");
 

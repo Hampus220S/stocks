@@ -3561,4 +3561,23 @@ tui_window_grid_t* tui_window_window_grid_search(tui_window_t* base, char* searc
   return NULL;
 }
 
+/*
+ * Search for window in menu and set it to active window
+ */
+int tui_menu_window_search_set(tui_menu_t* menu, char* search)
+{
+  tui_window_t* window = tui_menu_window_search(menu, search);
+
+  if (!window)
+  {
+    return 1;
+  }
+
+  info_print("window: %s", window->name);
+
+  tui_window_set(menu->tui, window);
+
+  return 0;
+}
+
 #endif // TUI_IMPLEMENT
