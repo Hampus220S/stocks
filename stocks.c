@@ -241,7 +241,7 @@ void chart_window_line_render(tui_window_t* head)
   }
 
   // Limit stock to window size
-  stock_resize(data->stock, head->_rect.w / 2);
+  stock_resize(data->stock, (head->_rect.w + 1) / 2);
 
   short color = (stock->_close > stock->_open) ? TUI_COLOR_GREEN : TUI_COLOR_RED;
 
@@ -321,7 +321,7 @@ void chart_window_candle_render(tui_window_t* head)
   }
 
   // Limit stock to window size
-  stock_resize(data->stock, head->_rect.w / 2);
+  stock_resize(data->stock, (head->_rect.w + 1) / 2);
 
   for (int index = 0; index < stock->_value_count; index++)
   {
@@ -346,7 +346,7 @@ void chart_window_candle_render(tui_window_t* head)
     short color = (value.close > value.open) ? TUI_COLOR_GREEN : TUI_COLOR_RED;
 
     // Wick
-    for (int y = high; y < first; y++)
+    for (int y = high; y <= first; y++)
     {
       tui_window_grid_square_set(window, x, y, (tui_window_grid_square_t)
       {
@@ -356,7 +356,7 @@ void chart_window_candle_render(tui_window_t* head)
     }
 
     // Wick
-    for (int y = second; y < low; y++)
+    for (int y = second; y <= low; y++)
     {
       tui_window_grid_square_set(window, x, y, (tui_window_grid_square_t)
       {
@@ -497,7 +497,7 @@ void range_window_update(tui_window_t* head)
 
   char buffer[16];
 
-  sprintf(buffer, "%s ", stock->range);
+  sprintf(buffer, "%s", stock->range);
 
   tui_window_text_string_set(window, buffer);
 }
@@ -530,7 +530,7 @@ void prices_window_update(tui_window_t* head)
 
     double price = fraction * (stock->_high - stock->_low) + stock->_low;
 
-    sprintf(buffer, " %.2f", price);
+    sprintf(buffer, " %.2f ", price);
 
     tui_parent_child_text_create(window, (tui_window_text_config_t)
     {
@@ -944,10 +944,10 @@ void chart_parent_init(tui_window_t* head)
     .rect = (tui_rect_t)
     {
       .y = 1,
-      .w = -1,
+      .w = TUI_PARENT_SIZE,
       .h = 1,
     },
-    .align = TUI_ALIGN_END,
+    .align = TUI_ALIGN_CENTER,
     .color.fg = TUI_COLOR_WHITE,
     .event.update = &range_window_update,
     .data = data,
