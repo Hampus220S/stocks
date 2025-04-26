@@ -31,8 +31,6 @@
 #define KEY_RTAB 353
 #define KEY_SPACE 32
 
-#define TUI_PARENT_SIZE 0
-
 /*
  * Declarations of tui structs
  */
@@ -73,6 +71,7 @@ typedef struct tui_menu_event_t
   bool (*key)   (tui_menu_t* menu, int key);
   void (*enter) (tui_menu_t* menu);
   void (*exit)  (tui_menu_t* menu);
+  void (*init)  (tui_menu_t* menu);
 } tui_menu_event_t;
 
 /*
@@ -107,6 +106,10 @@ typedef struct tui_rect_t
 } tui_rect_t;
 
 const tui_rect_t TUI_RECT_NONE = { .is_none = true };
+
+const tui_rect_t TUI_PARENT_RECT = { 0 };
+
+#define TUI_PARENT_SIZE 0
 
 /*
  * Foreground and background color struct
@@ -3121,6 +3124,11 @@ tui_menu_t* tui_menu_create(tui_t* tui, tui_menu_config_t config)
   tui->menus = temp_menus;
 
   tui->menus[tui->menu_count++] = menu;
+
+  if (menu->event.init)
+  {
+    menu->event.init(menu);
+  }
 
   return menu;
 }

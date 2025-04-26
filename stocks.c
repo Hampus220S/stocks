@@ -1448,6 +1448,23 @@ void root_window_init(tui_window_t* head)
 }
 
 /*
+ * Inittialize menu by creating root window
+ */
+void menu_init(tui_menu_t* menu)
+{
+  tui_menu_window_parent_create(menu, (tui_window_parent_config_t)
+  {
+    .name = "root",
+    .rect = TUI_PARENT_RECT,
+    .align = TUI_ALIGN_CENTER,
+    .pos = TUI_POS_CENTER,
+    .event.enter = &parent_window_enter,
+    .event.init  = &root_window_init,
+    .has_padding = true,
+  });
+}
+
+/*
  * Main function
  */
 int main(int argc, char* argv[])
@@ -1483,18 +1500,9 @@ int main(int argc, char* argv[])
 
   info_print("Created TUI");
 
-
-  tui_menu_t* menu = tui_menu_create(tui, (tui_menu_config_t) { 0 });
-
-  tui_menu_window_parent_create(menu, (tui_window_parent_config_t)
+  tui_menu_t* menu = tui_menu_create(tui, (tui_menu_config_t)
   {
-    .name = "root",
-    .rect = { 0 },
-    .align = TUI_ALIGN_CENTER,
-    .pos = TUI_POS_CENTER,
-    .event.enter = &parent_window_enter,
-    .event.init  = &root_window_init,
-    .has_padding = true,
+    .event.init = &menu_init,
   });
 
   // Set list window as the active window

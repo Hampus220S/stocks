@@ -1,6 +1,5 @@
 # Notes
 - prevent curl from outputting text in ncurses screen
-- create init event for menu
 - divide up has_padding to padding between children and around children
   (add padding between search and list windows)
 - don't change item border color on exit or enter, set color in item_window_render
