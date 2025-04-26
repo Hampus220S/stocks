@@ -3,8 +3,10 @@
 - don't change item border color on exit or enter, set color in item_window_render
 - take new screenshots
 - fix stocks_window_enter or remove it (fix switching from chart back to either search or list item)
-- write text in corner of data window "Yahoo Finance"
-- don't render chart under prices, render them next to each other
+- align '=' in stocks.c
+- replace 0 with TUI_PARENT_SIZE in stocks.c
+- make chart display graph all the way to the left and the bottom
+- create is_contained attribute to tui_window_t
 
 ## Duplicate
 - tui_..._window_..._search (only tui_window_t** windows and size_t count is needed)

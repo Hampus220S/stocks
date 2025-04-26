@@ -516,7 +516,7 @@ void prices_window_update(tui_window_t* head)
   // 1. Free all child windows
   tui_windows_free(&window->children, &window->child_count);
 
-  int lines = (head->_rect.h - 1) / 2;
+  int lines = (head->_rect.h + 1) / 2;
 
   char buffer[64];
 
@@ -869,33 +869,36 @@ void data_window_init(tui_window_t* head)
 }
 
 /*
- * Initialize stock window by creating child windows and data
+ * Initialize chart and prices windows
  */
-void stock_window_init(tui_window_t* head)
+void chart_prices_init(tui_window_t* head)
 {
-  tui_window_parent_t* stock_window = (tui_window_parent_t*) head;
+  tui_window_parent_t* chart_prices = (tui_window_parent_t*) head;
 
-  stock_data_t* data = malloc(sizeof(stock_data_t));
+  stock_data_t* data = head->data;
 
-  if (!data) return;
-
-  memset(data, 0, sizeof(stock_data_t));
-
-  head->data = data;
-
-  tui_window_parent_t* chart_parent = tui_parent_child_parent_create(stock_window, (tui_window_parent_config_t)
+  tui_window_parent_t* prices_parent = tui_parent_child_parent_create(chart_prices, (tui_window_parent_config_t)
   {
     .rect = TUI_RECT_NONE,
     .h_grow = true,
-    .w_grow = true,
-    .border = (tui_border_t)
-    {
-      .is_active = true,
-      .color.fg = TUI_COLOR_WHITE,
-    },
+    .color.bg = TUI_COLOR_CYAN,
   });
 
-  tui_window_grid_t* chart_window = tui_parent_child_grid_create(chart_parent, (tui_window_grid_config_t)
+  tui_parent_child_parent_create(prices_parent, (tui_window_parent_config_t)
+  {
+    .rect = (tui_rect_t)
+    {
+      .x = 1,
+      .w = 10,
+      .h = TUI_PARENT_SIZE,
+    },
+    .is_vertical = true,
+    .has_gap     = true,
+    .event.update = &prices_window_update,
+    .data = data,
+  });
+
+  tui_window_grid_t* chart_window = tui_parent_child_grid_create(chart_prices, (tui_window_grid_config_t)
   {
     .rect = TUI_RECT_NONE,
     .size = (tui_size_t)
@@ -911,6 +914,25 @@ void stock_window_init(tui_window_t* head)
   });
 
   data->chart = chart_window;
+}
+
+/*
+ * Initialize chart parent window, create chart, prices, title and range windows
+ */
+void chart_parent_init(tui_window_t* head)
+{
+  tui_window_parent_t* chart_parent = (tui_window_parent_t*) head;
+
+  stock_data_t* data = head->data;
+
+  tui_parent_child_parent_create(chart_parent, (tui_window_parent_config_t)
+  {
+    .event.init = &chart_prices_init,
+    .rect = TUI_RECT_NONE,
+    .data = data,
+    .w_grow = true,
+    .h_grow = true,
+  });
 
   tui_parent_child_text_create(chart_parent, (tui_window_text_config_t)
   {
@@ -921,20 +943,6 @@ void stock_window_init(tui_window_t* head)
       .h = 1,
     },
     .align = TUI_ALIGN_CENTER,
-  });
-
-  tui_parent_child_parent_create(chart_parent, (tui_window_parent_config_t)
-  {
-    .rect = (tui_rect_t)
-    {
-      .w = 10,
-      .h = 0,
-    },
-    .is_vertical = true,
-    .has_padding = true,
-    .has_gap     = true,
-    .event.update = &prices_window_update,
-    .data = data,
   });
 
   tui_parent_child_text_create(chart_parent, (tui_window_text_config_t)
@@ -949,6 +957,36 @@ void stock_window_init(tui_window_t* head)
     .color.fg = TUI_COLOR_WHITE,
     .event.update = &range_window_update,
     .data = data,
+  });
+}
+
+/*
+ * Initialize stock window by creating child windows and data
+ */
+void stock_window_init(tui_window_t* head)
+{
+  tui_window_parent_t* stock_window = (tui_window_parent_t*) head;
+
+  stock_data_t* data = malloc(sizeof(stock_data_t));
+
+  if (!data) return;
+
+  memset(data, 0, sizeof(stock_data_t));
+
+  head->data = data;
+
+  tui_parent_child_parent_create(stock_window, (tui_window_parent_config_t)
+  {
+    .rect = TUI_RECT_NONE,
+    .h_grow = true,
+    .w_grow = true,
+    .border = (tui_border_t)
+    {
+      .is_active = true,
+      .color.fg = TUI_COLOR_WHITE,
+    },
+    .data = data,
+    .event.init = &chart_parent_init,
   });
 
   tui_window_text_t* value_window = tui_parent_child_text_create(stock_window, (tui_window_text_config_t)
