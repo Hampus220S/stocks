@@ -828,6 +828,18 @@ void data_window_init(tui_window_t* head)
 {
   tui_window_parent_t* data_window = (tui_window_parent_t*) head;
 
+  tui_parent_child_text_create(data_window, (tui_window_text_config_t)
+  {
+    .string = "Yahoo Finance",
+    .rect = (tui_rect_t)
+    {
+      .w = -2,
+      .h = 1,
+      .y = -2,
+    },
+    .align = TUI_ALIGN_END,
+  });
+
   tui_parent_child_parent_create(data_window, (tui_window_parent_config_t)
   {
     .name = "data1",
