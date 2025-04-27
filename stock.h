@@ -394,8 +394,6 @@ static inline char* stock_response_get(char* symbol, char* range, char* interval
     return response;
   }
 
-  fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-
   free(response);
 
   return NULL;

@@ -1,5 +1,4 @@
 # Notes
-- prevent curl from outputting text in ncurses screen
 - don't change item border color on exit or enter, set color in item_window_render
 - take new screenshots
 - fix stocks_window_enter or remove it (fix switching from chart back to either search or list item)
