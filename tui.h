@@ -109,7 +109,8 @@ const tui_rect_t TUI_RECT_NONE = { .is_none = true };
 
 const tui_rect_t TUI_PARENT_RECT = { 0 };
 
-#define TUI_PARENT_SIZE 0
+#define TUI_PARENT_W 0
+#define TUI_PARENT_H 0
 
 /*
  * Foreground and background color struct

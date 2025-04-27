@@ -3,8 +3,9 @@
 - take new screenshots
 - fix stocks_window_enter or remove it (fix switching from chart back to either search or list item)
 - align '=' in stocks.c
-- replace 0 with TUI_PARENT_SIZE in stocks.c
 - fix: search text disappears when it is too long to print (tui_text_render h -> 0)
+- add init event to tui
+- create tui_window_grid_square_modify, if bg color is _NONE, use old bg color
 
 ## Duplicate
 - tui_..._window_..._search (only tui_window_t** windows and size_t count is needed)
