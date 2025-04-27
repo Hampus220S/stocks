@@ -198,7 +198,7 @@ static void chart_window_cursor_render(tui_window_t* head)
 
   for (int y = 0; y < head->_rect.h; y++)
   {
-    tui_window_grid_square_set(window, cursor_x, y, (tui_window_grid_square_t)
+    tui_window_grid_square_modify(window, cursor_x, y, (tui_window_grid_square_t)
     {
       .symbol   = '|',
       .color.fg = color,
@@ -207,14 +207,14 @@ static void chart_window_cursor_render(tui_window_t* head)
 
   for (int x = 0; x < head->_rect.w; x++)
   {
-    tui_window_grid_square_set(window, x, cursor_y, (tui_window_grid_square_t)
+    tui_window_grid_square_modify(window, x, cursor_y, (tui_window_grid_square_t)
     {
       .symbol   = '-',
       .color.fg = color,
     });
   }
 
-  tui_window_grid_square_set(window, cursor_x, cursor_y, (tui_window_grid_square_t)
+  tui_window_grid_square_modify(window, cursor_x, cursor_y, (tui_window_grid_square_t)
   {
     .symbol   = ' ',
     .color.bg = color,

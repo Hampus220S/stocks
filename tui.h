@@ -2662,20 +2662,6 @@ tui_window_grid_t* tui_parent_child_grid_create(tui_window_parent_t* parent, tui
 }
 
 /*
- * Set color and symbol of square in grid window
- */
-void tui_window_grid_square_set(tui_window_grid_t* window, int x, int y, tui_window_grid_square_t square)
-{
-  if (x >= 0 && x < window->_size.w &&
-      y >= 0 && y < window->_size.h)
-  {
-    int index = y * window->_size.w + x;
-
-    window->grid[index] = square;
-  }
-}
-
-/*
  * Get square at x y in grid window
  */
 tui_window_grid_square_t* tui_window_grid_square_get(tui_window_grid_t* window, int x, int y)
@@ -2689,6 +2675,45 @@ tui_window_grid_square_t* tui_window_grid_square_get(tui_window_grid_t* window, 
   }
 
   return NULL;
+}
+
+/*
+ * Set color and symbol of square in grid window
+ */
+void tui_window_grid_square_set(tui_window_grid_t* window, int x, int y, tui_window_grid_square_t square)
+{
+  tui_window_grid_square_t* old_square = tui_window_grid_square_get(window, x, y);
+
+  if (old_square)
+  {
+    *old_square = square;
+  }
+}
+
+/*
+ * Modify grid square by changing symbol or color if specified
+ */
+void tui_window_grid_square_modify(tui_window_grid_t* window, int x, int y, tui_window_grid_square_t square)
+{
+  tui_window_grid_square_t* old_square = tui_window_grid_square_get(window, x, y);
+
+  if (old_square)
+  {
+    if (square.color.fg != TUI_COLOR_NONE)
+    {
+      old_square->color.fg = square.color.fg;
+    }
+
+    if (square.color.bg != TUI_COLOR_NONE)
+    {
+      old_square->color.bg = square.color.bg;
+    }
+
+    if (square.symbol)
+    {
+      old_square->symbol = square.symbol;
+    }
+  }
 }
 
 /*
