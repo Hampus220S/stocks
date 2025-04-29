@@ -177,6 +177,7 @@ typedef struct tui_window_t
   tui_window_type_t    type;
   char*                name;
   bool                 is_hidden;
+  bool                 _is_visable;
   bool                 is_interact;
   bool                 is_contain;
   bool                 w_grow;
@@ -1237,7 +1238,12 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
   // Render children
   for (size_t index = 0; index < window->child_count; index++)
   {
-    tui_window_render(window->children[index]);
+    tui_window_t* child = window->children[index];
+
+    if (child->_is_visable)
+    {
+      tui_window_render(child);
+    }
   }
   
   overwrite(head->window, parent);
@@ -1279,7 +1285,12 @@ static inline void tui_windows_render(tui_window_t** windows, size_t count)
 {
   for (size_t index = count; index-- > 0;)
   {
-    tui_window_render(windows[index]);
+    tui_window_t* window = windows[index];
+
+    if (window->_is_visable)
+    {
+      tui_window_render(window);
+    }
   }
 }
 
@@ -1841,6 +1852,31 @@ static inline tui_rect_t tui_window_rect_get(tui_rect_t rect, int parent_w, int 
 }
 
 /*
+ * Hide window by setting _is_visable to false
+ *
+ * If window is parent, hide children recursivly
+ */
+static inline void tui_window_set_invisable(tui_window_t* window)
+{
+  if (window)
+  {
+    window->_is_visable = false;
+
+    if (window->type == TUI_WINDOW_PARENT)
+    {
+      tui_window_parent_t* parent = (tui_window_parent_t*) window;
+
+      for (size_t index = 0; index < parent->child_count; index++)
+      {
+        tui_window_t* child = parent->children[index];
+
+        tui_window_set_invisable(child);
+      }
+    }
+  }
+}
+
+/*
  * Calculate rect of parent's children
  *
  * Make use of the temporarily stored sizes in _rect
@@ -1857,7 +1893,7 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
   {
     tui_window_t* child = parent->children[index];
 
-    if (child->rect.is_none)
+    if (child->rect.is_none && !child->is_hidden)
     {
       align_count++;
 
@@ -1917,6 +1953,13 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
   {
     tui_window_t* child = parent->children[index];
 
+    if (child->is_hidden)
+    {
+      tui_window_set_invisable(child);
+
+      continue;
+    }
+
     if (child->rect.is_none)
     {
       tui_child_rect_calc(&rect, parent, child, last_child, max_size, align_size, align_count, &align_index, grow_count, &grow_index);
@@ -1932,35 +1975,63 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
       child->_rect = tui_window_rect_get(child->rect, parent_rect.w, parent_rect.h);
     }
 
-    // Move child window into parent window
-    child->_rect.x += parent->head._rect.x;
-
-    child->_rect.y += parent->head._rect.y;
-
-    child->window = tui_ncurses_window_update(child->window, child->_rect);
-
-    if (child->type == TUI_WINDOW_PARENT)
+    if (child->_rect.w == 0 || child->_rect.h == 0)
     {
-      tui_children_rect_calc((tui_window_parent_t*) child);
+      tui_window_set_invisable(child);
+    }
+    else
+    {
+      child->_is_visable = true;
+
+      // Move child window into parent window
+      child->_rect.x += parent->head._rect.x;
+
+      child->_rect.y += parent->head._rect.y;
+
+      child->window = tui_ncurses_window_update(child->window, child->_rect);
+
+      if (child->type == TUI_WINDOW_PARENT)
+      {
+        tui_children_rect_calc((tui_window_parent_t*) child);
+      }
     }
   }
 }
 
 /*
  * Calculate rect of window
+ *
+ * The content of this function is similar to
+ * the content of the for loop in tui_children_rect_calc
  */
 static inline void tui_window_rect_calc(tui_window_t* window, int w, int h)
 {
+  if (window->is_hidden)
+  {
+    tui_window_set_invisable(window);
+
+    return;
+  }
+
   if (!window->rect.is_none)
   {
     window->_rect = tui_window_rect_get(window->rect, w, h);
   }
 
-  window->window = tui_ncurses_window_update(window->window, window->_rect);
-
-  if(window->type == TUI_WINDOW_PARENT)
+  if (window->_rect.w == 0 || window->_rect.h == 0)
   {
-    tui_children_rect_calc((tui_window_parent_t*) window);
+    tui_window_set_invisable(window);
+  }
+  else
+  {
+    window->_is_visable = true;
+
+    window->window = tui_ncurses_window_update(window->window, window->_rect);
+
+    if(window->type == TUI_WINDOW_PARENT)
+    {
+      tui_children_rect_calc((tui_window_parent_t*) window);
+    }
   }
 }
 
@@ -2157,6 +2228,7 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
     .w_grow      = config.w_grow,
     .h_grow      = config.h_grow,
     .is_hidden   = config.is_hidden,
+    ._is_visable = !config.is_hidden,
     .is_interact = config.is_interact,
     .is_contain  = config.is_contain,
     .color       = config.color,
@@ -2249,6 +2321,7 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_
     .w_grow      = config.w_grow,
     .h_grow      = config.h_grow,
     .is_hidden   = config.is_hidden,
+    ._is_visable = !config.is_hidden,
     .is_interact = config.is_interact,
     .is_contain  = config.is_contain,
     .color       = config.color,
@@ -2342,6 +2415,7 @@ static inline tui_window_grid_t* _tui_window_grid_create(tui_t* tui, tui_window_
     .w_grow      = config.w_grow,
     .h_grow      = config.h_grow,
     .is_hidden   = config.is_hidden,
+    ._is_visable = !config.is_hidden,
     .is_interact = config.is_interact,
     .is_contain  = config.is_contain,
     .color       = config.color,
@@ -3094,7 +3168,7 @@ bool tui_list_event(tui_list_t* list, int key)
 }
 
 /*
- * Set window to active window
+ * Set window to active window, but only if it is visable
  *
  * Call enter event for new window and exit event for old window
  *
@@ -3102,25 +3176,26 @@ bool tui_list_event(tui_list_t* list, int key)
  */
 void tui_window_set(tui_t* tui, tui_window_t* window)
 {
-  if (tui->window == window) return;
-
-  tui_window_t* last_window = tui->window;
-
-  tui->window = window;
-
-  if (last_window && last_window->event.exit)
+  if (tui->window != window && window->_is_visable)
   {
-    last_window->event.exit(last_window);
-  }
+    tui_window_t* last_window = tui->window;
 
-  if (window && window->event.enter)
-  {
-    window->event.enter(window);
-  }
+    tui->window = window;
 
-  if (window->menu)
-  {
-    tui->menu = window->menu;
+    if (last_window && last_window->event.exit)
+    {
+      last_window->event.exit(last_window);
+    }
+
+    if (window && window->event.enter)
+    {
+      window->event.enter(window);
+    }
+
+    if (window->menu)
+    {
+      tui->menu = window->menu;
+    }
   }
 }
 
@@ -3282,7 +3357,7 @@ static bool tui_windows_tab_forward(tui_t* tui, tui_window_t** windows, size_t c
   {
     tui_window_t* window = windows[index];
 
-    if (!window->is_hidden && window->is_interact)
+    if (window->_is_visable && window->is_interact)
     {
       tui_window_set(tui, window);
 
@@ -3403,7 +3478,7 @@ static bool tui_windows_tab_backward(tui_t* tui, tui_window_t** windows, size_t 
   {
     tui_window_t* window = windows[index];
 
-    if (!window->is_hidden && window->is_interact)
+    if (window->_is_visable && window->is_interact)
     {
       tui_window_set(tui, window);
 

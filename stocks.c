@@ -1503,8 +1503,6 @@ void menu_init(tui_menu_t* menu)
   {
     .name        = "root",
     .rect        = TUI_PARENT_RECT,
-    .align       = TUI_ALIGN_CENTER,
-    .pos         = TUI_POS_CENTER,
     .event.enter = &parent_window_enter,
     .event.init  = &root_window_init,
     .has_padding = true,
@@ -1521,14 +1519,10 @@ int main(int argc, char* argv[])
 
   if(tui_init() != 0)
   {
-    info_print("Failed to initialize TUI");
-
     debug_file_close();
 
     return 1;
   }
-
-  info_print("Initialized TUI");
 
   tui_t* tui = tui_create((tui_config_t)
   {
@@ -1537,16 +1531,12 @@ int main(int argc, char* argv[])
 
   if (!tui)
   {
-    info_print("Failed to create TUI");
-
     tui_quit();
 
     debug_file_close();
 
     return 2;
   }
-
-  info_print("Created TUI");
 
   tui_menu_t* menu = tui_menu_create(tui, (tui_menu_config_t)
   {
@@ -1556,21 +1546,13 @@ int main(int argc, char* argv[])
   // Set list window as the active window
   tui_menu_window_search_set(menu, "root stocks list");
 
-  info_print("Starting tui");
-
   tui_start(tui);
-
-  info_print("Stopping tui");
 
   tui_stop(tui);
 
   tui_delete(&tui);
 
-  info_print("Deleted TUI");
-
   tui_quit();
-
-  info_print("Quitted TUI");
 
   debug_file_close();
 
