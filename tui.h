@@ -441,11 +441,11 @@ void tui_border_draw(tui_window_parent_t* window)
 }
 
 /*
- * Initialize tui colors
+ * Initialize tui ncurses colors
  *
  * ncurses color and index differ by 1
  */
-void tui_colors_init(void)
+void tui_ncurses_colors_init(void)
 {
   for (short fg_index = 0; fg_index < 9; fg_index++)
   {
@@ -464,7 +464,7 @@ void tui_colors_init(void)
 /*
  * Initialize tui (ncurses)
  */
-int tui_init(void)
+int tui_ncurses_init(void)
 {
   initscr();
   noecho();
@@ -480,7 +480,7 @@ int tui_init(void)
 
   use_default_colors();
 
-  tui_colors_init();
+  tui_ncurses_colors_init();
 
   clear();
   refresh();
@@ -491,7 +491,7 @@ int tui_init(void)
 /*
  * Quit tui (ncurses)
  */
-void tui_quit(void)
+void tui_ncurses_quit(void)
 {
   clear();
 
@@ -599,14 +599,21 @@ typedef struct tui_config_t
 } tui_config_t;
 
 /*
- * Create tui struct
+ * Create tui struct and initialize ncurses
  */
 tui_t* tui_create(tui_config_t config)
 {
+  if (tui_ncurses_init() != 0)
+  {
+    return NULL;
+  }
+
   tui_t* tui = malloc(sizeof(tui_t));
 
   if (!tui)
   {
+    tui_ncurses_quit();
+
     return NULL;
   }
 
@@ -738,7 +745,7 @@ static inline void tui_menu_free(tui_menu_t** menu)
 }
 
 /*
- * Delete (free) tui struct
+ * Delete (free) tui struct and quit ncurses
  */
 void tui_delete(tui_t** tui)
 {
@@ -756,6 +763,8 @@ void tui_delete(tui_t** tui)
   free(*tui);
 
   *tui = NULL;
+
+  tui_ncurses_quit();
 }
 
 /*

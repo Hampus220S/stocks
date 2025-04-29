@@ -1514,7 +1514,7 @@ void menu_init(tui_menu_t* menu)
 /*
  * Initialize tui
  */
-void app_init(tui_t* tui)
+void tui_init(tui_t* tui)
 {
   tui_menu_t* menu = tui_menu_create(tui, (tui_menu_config_t)
   {
@@ -1532,23 +1532,14 @@ int main(int argc, char* argv[])
 {
   debug_file_open("debug.log");
 
-  if(tui_init() != 0)
-  {
-    debug_file_close();
-
-    return 1;
-  }
-
   tui_t* tui = tui_create((tui_config_t)
   {
     .event.key  = &tab_event,
-    .event.init = &app_init,
+    .event.init = &tui_init,
   });
 
   if (!tui)
   {
-    tui_quit();
-
     debug_file_close();
 
     return 2;
@@ -1559,8 +1550,6 @@ int main(int argc, char* argv[])
   tui_stop(tui);
 
   tui_delete(&tui);
-
-  tui_quit();
 
   debug_file_close();
 
