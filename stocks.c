@@ -1512,6 +1512,20 @@ void menu_init(tui_menu_t* menu)
 }
 
 /*
+ * Initialize tui
+ */
+void app_init(tui_t* tui)
+{
+  tui_menu_t* menu = tui_menu_create(tui, (tui_menu_config_t)
+  {
+    .event.init = &menu_init,
+  });
+
+  // Set list window as the active window
+  tui_menu_window_search_set(menu, "root stocks list");
+}
+
+/*
  * Main function
  */
 int main(int argc, char* argv[])
@@ -1527,7 +1541,8 @@ int main(int argc, char* argv[])
 
   tui_t* tui = tui_create((tui_config_t)
   {
-    .event.key = &tab_event,
+    .event.key  = &tab_event,
+    .event.init = &app_init,
   });
 
   if (!tui)
@@ -1538,14 +1553,6 @@ int main(int argc, char* argv[])
 
     return 2;
   }
-
-  tui_menu_t* menu = tui_menu_create(tui, (tui_menu_config_t)
-  {
-    .event.init = &menu_init,
-  });
-
-  // Set list window as the active window
-  tui_menu_window_search_set(menu, "root stocks list");
 
   tui_start(tui);
 

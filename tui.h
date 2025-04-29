@@ -79,7 +79,8 @@ typedef struct tui_menu_event_t
  */
 typedef struct tui_event_t
 {
-  bool (*key) (tui_t* tui, int key);
+  bool (*key)  (tui_t* tui, int key);
+  void (*init) (tui_t* tui);
 } tui_event_t;
 
 /*
@@ -618,6 +619,11 @@ tui_t* tui_create(tui_config_t config)
     .event  = config.event,
     .color  = config.color
   };
+
+  if (tui->event.init)
+  {
+    tui->event.init(tui);
+  }
 
   return tui;
 }
