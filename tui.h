@@ -171,11 +171,14 @@ typedef enum tui_window_type_t
  * Window struct
  *
  * is_contain window can't be the largest child in parent
+ *
+ * is_atomic window either contain all it's content or is invisable
  */
 typedef struct tui_window_t
 {
   tui_window_type_t    type;
   char*                name;
+  bool                 is_atomic;
   bool                 is_hidden;
   bool                 _is_visable;
   bool                 is_interact;
@@ -1678,7 +1681,14 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
 
   if (rect->y + h > max_size.h + end_y)
   {
-    h = max_size.h + end_y - rect->y;
+    if (child->is_atomic)
+    {
+      h = 0;
+    }
+    else
+    {
+      h = max_size.h + end_y - rect->y;
+    }
   }
 
   rect->w = w;
@@ -1797,7 +1807,14 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
 
   if (rect->x + w > max_size.w + end_x)
   {
-    w = max_size.w + end_x - rect->x;
+    if (child->is_atomic)
+    {
+      w = 0;
+    }
+    else
+    {
+      w = max_size.w + end_x - rect->x;
+    }
   }
 
   rect->w = w;
@@ -2195,6 +2212,7 @@ typedef struct tui_window_parent_config_t
   bool               h_grow;
   tui_color_t        color;
   bool               is_hidden;
+  bool               is_atomic;
   bool               is_interact;
   bool               is_contain;
   tui_border_t       border;
@@ -2227,6 +2245,7 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
     .rect        = config.rect,
     .w_grow      = config.w_grow,
     .h_grow      = config.h_grow,
+    .is_atomic   = config.is_atomic,
     .is_hidden   = config.is_hidden,
     ._is_visable = !config.is_hidden,
     .is_interact = config.is_interact,
@@ -2290,6 +2309,7 @@ typedef struct tui_window_text_config_t
   bool               h_grow;
   tui_color_t        color;
   bool               is_hidden;
+  bool               is_atomic;
   bool               is_interact;
   bool               is_contain;
   char*              string;
@@ -2320,6 +2340,7 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_
     .rect        = config.rect,
     .w_grow      = config.w_grow,
     .h_grow      = config.h_grow,
+    .is_atomic   = config.is_atomic,
     .is_hidden   = config.is_hidden,
     ._is_visable = !config.is_hidden,
     .is_interact = config.is_interact,
@@ -2357,6 +2378,7 @@ typedef struct tui_window_grid_config_t
   bool               h_grow;
   tui_color_t        color;
   bool               is_hidden;
+  bool               is_atomic;
   bool               is_interact;
   bool               is_contain;
   tui_size_t         size;
@@ -2414,6 +2436,7 @@ static inline tui_window_grid_t* _tui_window_grid_create(tui_t* tui, tui_window_
     .rect        = config.rect,
     .w_grow      = config.w_grow,
     .h_grow      = config.h_grow,
+    .is_atomic   = config.is_atomic,
     .is_hidden   = config.is_hidden,
     ._is_visable = !config.is_hidden,
     .is_interact = config.is_interact,

@@ -7,7 +7,6 @@
 - remove last_child and modify child->_rect directly in tui_child_rect_calc
   (update &rect x += child->w or y += child->h after child->_rect is sat in tui_child_rect_calc)
 - tui_list_event should not increase index if item window is not visable
-- create tui_window_t attribute is_atomic (can't be smaller than content size)
 
 ## Duplicate
 - tui_..._window_..._search (only tui_window_t** windows and size_t count is needed)

@@ -1259,6 +1259,7 @@ void list_window_init(tui_window_t* head)
       .data         = stock,
       .align        = TUI_ALIGN_BETWEEN,
       .w_grow       = true,
+      .is_atomic    = true,
     });
 
     tui_list_item_add(data->list, (tui_window_t*) item_window);
