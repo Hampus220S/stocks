@@ -1408,8 +1408,8 @@ static inline void tui_window_parent_size_calc(tui_window_parent_t* parent)
   }
   else if (parent->children && parent->child_count)
   {
-    tui_size_t align_size = (tui_size_t) { 0 };
-    tui_size_t max_size   = (tui_size_t) { 0 };
+    tui_size_t align_size = { 0 };
+    tui_size_t max_size   = { 0 };
 
     size_t align_count = 0;
 
@@ -1910,52 +1910,15 @@ static inline void tui_window_set_invisable(tui_window_t* window)
 }
 
 /*
- * Calculate rect of parent's children
- *
- * Make use of the temporarily stored sizes in _rect
+ * Get maximum content size of parent
  */
-static inline void tui_children_rect_calc(tui_window_parent_t* parent)
+static inline tui_size_t tui_max_size_get(tui_window_parent_t* parent)
 {
-  tui_size_t align_size = (tui_size_t) { 0 };
-
-  size_t align_count = 0;
-
-  size_t grow_count = 0;
-
-  for (size_t index = 0; index < parent->child_count; index++)
+  tui_size_t max_size =
   {
-    tui_window_t* child = parent->children[index];
-
-    if (child->rect.is_none && !child->is_hidden)
-    {
-      align_count++;
-
-      if (parent->is_vertical)
-      {
-        align_size.h += child->_rect.h;
-
-        align_size.w = MAX(align_size.w, child->_rect.w);
-
-        if (child->h_grow)
-        {
-          grow_count++;
-        }
-      }
-      else
-      {
-        align_size.w += child->_rect.w;
-
-        align_size.h = MAX(align_size.h, child->_rect.h);
-
-        if (child->w_grow)
-        {
-          grow_count++;
-        }
-      }
-    }
-  }
-
-  tui_size_t max_size = { parent->head._rect.w, parent->head._rect.h };
+    .w = parent->head._rect.w,
+    .h = parent->head._rect.h
+  };
 
   if (parent->has_padding)
   {
@@ -1969,9 +1932,84 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
     max_size.h -= 2;
   }
 
-  // Limit size to parent's size
-  align_size.w = MIN(align_size.w, max_size.w);
+  return max_size;
+}
 
+/*
+ * Calculate rect of parent's children
+ *
+ * Make use of the temporarily stored sizes in _rect
+ */
+static inline void tui_children_rect_calc(tui_window_parent_t* parent)
+{
+  tui_size_t max_size = tui_max_size_get(parent);
+
+  tui_size_t align_size = { 0 };
+
+  size_t align_count = 0;
+  size_t grow_count  = 0;
+
+  for (size_t index = 0; index < parent->child_count; index++)
+  {
+    tui_window_t* child = parent->children[index];
+
+    if (!child->rect.is_none) continue;
+
+    if (child->is_hidden)
+    {
+      child->_is_visable = false;
+    }
+    else if (parent->is_vertical)
+    {
+      if (child->is_atomic &&
+         (align_size.h + child->_rect.h > max_size.h ||
+          child->_rect.w > max_size.w))
+      {
+        child->_is_visable = false;
+
+        continue;
+      }
+
+      child->_is_visable = true;
+
+      align_count++;
+
+      align_size.h += child->_rect.h;
+
+      align_size.w = MAX(align_size.w, child->_rect.w);
+
+      if (child->h_grow)
+      {
+        grow_count++;
+      }
+    }
+    else
+    {
+      if (child->is_atomic &&
+         (align_size.w + child->_rect.w > max_size.w ||
+          child->_rect.h > max_size.h))
+      {
+        child->_is_visable = false;
+
+        continue;
+      }
+
+      child->_is_visable = true;
+
+      align_count++;
+
+      align_size.w += child->_rect.w;
+
+      align_size.h = MAX(align_size.h, child->_rect.h);
+
+      if (child->w_grow)
+      {
+        grow_count++;
+      }
+    }
+  }
+
+  align_size.w = MIN(align_size.w, max_size.w);
   align_size.h = MIN(align_size.h, max_size.h);
 
   // x and y is stored temporarily for children
@@ -1984,7 +2022,7 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
   {
     tui_window_t* child = parent->children[index];
 
-    if (child->is_hidden)
+    if (!child->_is_visable)
     {
       tui_window_set_invisable(child);
 
@@ -2012,7 +2050,6 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
       // Move child window into parent window
       child->_rect.x += parent->head._rect.x;
-
       child->_rect.y += parent->head._rect.y;
 
       child->window = tui_ncurses_window_update(child->window, child->_rect);
@@ -2482,8 +2519,6 @@ static inline int tui_windows_window_append(tui_window_t*** windows, size_t* cou
 
   if (!temp_windows)
   {
-    info_print("tui_windows_window_append realloc: %s", strerror(errno));
-
     return 1;
   }
 
