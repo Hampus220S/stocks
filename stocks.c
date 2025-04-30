@@ -1513,7 +1513,6 @@ void root_window_init(tui_window_t* head)
     .is_vertical = true,
     .h_grow      = true,
     .is_interact = true,
-    .has_gap     = true,
   });
 
   tui_parent_child_parent_create(root_window, (tui_window_parent_config_t)
@@ -1525,7 +1524,6 @@ void root_window_init(tui_window_t* head)
     .is_vertical = true,
     .w_grow      = true,
     .h_grow      = true,
-    .has_gap     = true,
   });
 }
 
@@ -1541,7 +1539,6 @@ void menu_init(tui_menu_t* menu)
     .event.enter = &parent_window_enter,
     .event.init  = &root_window_init,
     .has_padding = true,
-    .has_gap     = true,
   });
 }
 

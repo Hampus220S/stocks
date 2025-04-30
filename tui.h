@@ -3,7 +3,7 @@
  *
  * Written by Hampus Fridholm
  *
- * Last updated: 2025-04-20
+ * Last updated: 2025-04-30
  */
 
 #ifndef TUI_H
@@ -1953,7 +1953,12 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
   {
     tui_window_t* child = parent->children[index];
 
-    if (!child->rect.is_none) continue;
+    if (!child->rect.is_none)
+    {
+      child->_is_visable = !child->is_hidden;
+
+      continue;
+    }
 
     if (child->is_hidden)
     {
