@@ -1132,20 +1132,29 @@ void item_window_update(tui_window_t* head)
 
   if (symbol_window)
   {
-    sprintf(buffer, "%s    ", stock->symbol);
+    sprintf(buffer, "%s   ", stock->symbol);
 
     tui_window_text_string_set(symbol_window, buffer);
   }
 
-  tui_window_text_t* value_window = tui_window_window_text_search((tui_window_t*) item_window, "value");
+  tui_window_text_t* price_window = tui_window_window_text_search((tui_window_t*) item_window, "value price");
 
-  if (value_window)
+  if (price_window)
   {
     sprintf(buffer, "%.2f", stock->close);
 
-    tui_window_text_string_set(value_window, buffer);
+    tui_window_text_string_set(price_window, buffer);
+  }
 
-    value_window->head.color.fg = color;
+  tui_window_text_t* diff_window = tui_window_window_text_search((tui_window_t*) item_window, "value diff");
+
+  if (diff_window)
+  {
+    sprintf(buffer, "%+.2f", stock->close - stock->open);
+
+    tui_window_text_string_set(diff_window, buffer);
+
+    diff_window->head.color.fg = color;
   }
 }
 
@@ -1167,11 +1176,27 @@ void item_window_init(tui_window_t* head)
     .align = TUI_ALIGN_START,
   });
 
-  tui_parent_child_text_create(item_window, (tui_window_text_config_t)
+  tui_window_parent_t* value_window = tui_parent_child_parent_create(item_window, (tui_window_parent_config_t)
   {
-    .name  = "value",
-    .rect  = TUI_RECT_NONE,
-    .align = TUI_ALIGN_END,
+    .name        = "value",
+    .rect        = TUI_RECT_NONE,
+    .is_vertical = true,
+  });
+
+  tui_parent_child_text_create(value_window, (tui_window_text_config_t)
+  {
+    .name   = "price",
+    .rect   = TUI_RECT_NONE,
+    .align  = TUI_ALIGN_END,
+    .w_grow = true,
+  });
+
+  tui_parent_child_text_create(value_window, (tui_window_text_config_t)
+  {
+    .name   = "diff",
+    .rect   = TUI_RECT_NONE,
+    .align  = TUI_ALIGN_END,
+    .w_grow = true,
   });
 }
 
