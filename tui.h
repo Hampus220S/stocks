@@ -1592,7 +1592,7 @@ static inline int tui_child_h_get(tui_window_t* child, int max_h)
  *
  * align_count and align_index must be int, because they are used in integer arithmetic
  */
-static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
+static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
 {
   if (*align_index == 0)
   {
@@ -1646,7 +1646,8 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
 
     h_gap += gap;
 
-    if (h_space - gap * (align_count - 1) >= *align_index)
+    // Add extra gap between first windows
+    if (h_space - gap * (align_count - 1) > *align_index)
     {
       h_gap += 1;
     }
@@ -1677,16 +1678,12 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
 
       rect->y += (float) parent->align / 2.f * h_space;
     }
-    else if (parent->has_gap)
+
+    if (parent->has_gap)
     {
       // Add this gap after current child
       h_gap += 1;
     }
-  }
-
-  if (*align_index > 0)
-  {
-    rect->y += last_child->_rect.h + h_gap;
   }
 
   int w = tui_child_w_get(child, max_size.w);
@@ -1712,12 +1709,16 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
   rect->x += (float) parent->pos / 2.f * (max_size.w - w);
 
   (*align_index)++;
+
+  child->_rect = *rect;
+
+  rect->y += child->_rect.h + h_gap;
 }
 
 /*
  * Calculate rect of horizontally aligned child
  */
-static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
+static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
 {
   if (*align_index == 0)
   {
@@ -1760,7 +1761,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
     if (parent->has_gap)
     {
       // Add this gap after current child
-      w_gap += 1;
+      w_gap += 2;
     }
   }
   else if (parent->align == TUI_ALIGN_BETWEEN)
@@ -1771,7 +1772,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
     w_gap += gap;
 
     // Add extra gap between first windows
-    if (w_space - gap * (align_count - 1) >= *align_index)
+    if (w_space - gap * (align_count - 1) > *align_index)
     {
       w_gap += 1;
     }
@@ -1803,16 +1804,12 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
 
       rect->x += (float) parent->align / 2.f * w_space;
     }
-    else if (parent->has_gap)
+
+    if (parent->has_gap)
     {
       // Add this gap after current child
       w_gap += 2;
     }
-  }
-
-  if (*align_index > 0)
-  {
-    rect->x += last_child->_rect.w + w_gap;
   }
 
   int h = tui_child_h_get(child, max_size.h);
@@ -1838,20 +1835,24 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
   rect->y += (float) parent->pos / 2.f * (max_size.h - h);
 
   (*align_index)++;
+
+  child->_rect = *rect;
+
+  rect->x += child->_rect.w + w_gap;
 }
 
 /*
  * Calculate rect of aligned child
  */
-static inline void tui_child_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
+static inline void tui_child_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
 {
   if (parent->is_vertical)
   {
-    tui_child_vert_rect_calc(rect, parent, child, last_child, max_size, align_size, align_count, align_index, grow_count, grow_index);
+    tui_child_vert_rect_calc(rect, parent, child, max_size, align_size, align_count, align_index, grow_count, grow_index);
   }
   else
   {
-    tui_child_horiz_rect_calc(rect, parent, child, last_child, max_size, align_size, align_count, align_index, grow_count, grow_index);
+    tui_child_horiz_rect_calc(rect, parent, child, max_size, align_size, align_count, align_index, grow_count, grow_index);
   }
 }
 
@@ -1976,8 +1977,6 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
   // x and y is stored temporarily for children
   tui_rect_t rect = { 0 };
 
-  tui_window_t* last_child = NULL;
-
   int align_index = 0;
   int grow_index  = 0;
 
@@ -1994,11 +1993,7 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
 
     if (child->rect.is_none)
     {
-      tui_child_rect_calc(&rect, parent, child, last_child, max_size, align_size, align_count, &align_index, grow_count, &grow_index);
-
-      child->_rect = rect;
-
-      last_child = child;
+      tui_child_rect_calc(&rect, parent, child, max_size, align_size, align_count, &align_index, grow_count, &grow_index);
     }
     else
     {
