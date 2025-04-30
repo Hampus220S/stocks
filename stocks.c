@@ -888,6 +888,7 @@ void chart_prices_init(tui_window_t* head)
     .data         = data,
     .h_grow       = true,
     .w_grow       = true,
+    .is_atomic    = true,
   });
 
   data->chart = chart_window;
@@ -935,6 +936,24 @@ void chart_parent_init(tui_window_t* head)
     .event.update = &range_window_update,
     .data         = data,
   });
+
+  tui_window_text_t* value_window = tui_parent_child_text_create(chart_parent, (tui_window_text_config_t)
+  {
+    .string       = "",
+    .rect         = (tui_rect_t)
+    {
+      .y          = TUI_PARENT_H - 2,
+      .w          = TUI_PARENT_W,
+      .h          = 1,
+    },
+    .event.update = &value_window_update,
+    .color.fg     = TUI_COLOR_YELLOW,
+    .align        = TUI_ALIGN_CENTER,
+    .w_grow       = true,
+    .data         = data,
+  });
+
+  data->window = value_window;
 }
 
 /*
@@ -965,19 +984,6 @@ void stock_window_init(tui_window_t* head)
     .data        = data,
     .event.init  = &chart_parent_init,
   });
-
-  tui_window_text_t* value_window = tui_parent_child_text_create(stock_window, (tui_window_text_config_t)
-  {
-    .string       = "",
-    .rect         = TUI_RECT_NONE,
-    .event.update = &value_window_update,
-    .color.fg     = TUI_COLOR_YELLOW,
-    .align        = TUI_ALIGN_CENTER,
-    .w_grow       = true,
-    .data         = data,
-  });
-
-  data->window = value_window;
 
   tui_parent_child_parent_create(stock_window, (tui_window_parent_config_t)
   {
@@ -1519,6 +1525,7 @@ void root_window_init(tui_window_t* head)
     .is_vertical = true,
     .w_grow      = true,
     .h_grow      = true,
+    .has_gap     = true,
   });
 }
 
