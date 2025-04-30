@@ -3097,6 +3097,45 @@ int tui_list_item_add(tui_list_t* list, tui_window_t* item)
 }
 
 /*
+ * Update list item by changing to another if it is invisable
+ *
+ * RETURN (bool changed)
+ */
+bool tui_list_item_update(tui_list_t* list)
+{
+  tui_window_t* item = list->items[list->item_index];
+
+  if (!item->_is_visable)
+  {
+    for (size_t index = list->item_index + 1; index < list->item_count; index++)
+    {
+      item = list->items[index];
+
+      if (item->_is_visable)
+      {
+        list->item_index = index;
+
+        return true;
+      }
+    }
+
+    for (size_t index = list->item_index; index-- > 0;)
+    {
+      item = list->items[index];
+
+      if (item->_is_visable)
+      {
+        list->item_index = index;
+
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/*
  * Create list struct
  */
 tui_list_t* tui_list_create(tui_t* tui, bool is_vertical)
@@ -3138,14 +3177,19 @@ void tui_list_delete(tui_list_t** list)
  */
 static inline bool tui_list_scroll_forward(tui_list_t* list)
 {
-  if (list->item_index >= (list->item_count - 1))
+  for (size_t index = list->item_index + 1; index < list->item_count; index++)
   {
-    return false;
+    tui_window_t* window = list->items[index];
+
+    if (window && window->_is_visable)
+    {
+      list->item_index = index;
+
+      return true;
+    }
   }
 
-  list->item_index++;
-
-  return true;
+  return false;
 }
 
 /*
@@ -3153,14 +3197,19 @@ static inline bool tui_list_scroll_forward(tui_list_t* list)
  */
 static inline bool tui_list_scroll_backward(tui_list_t* list)
 {
-  if (list->item_index <= 0)
+  for (size_t index = list->item_index; index-- > 0;)
   {
-    return false;
+    tui_window_t* window = list->items[index];
+
+    if (window && window->_is_visable)
+    {
+      list->item_index = index;
+
+      return true;
+    }
   }
 
-  list->item_index--;
-
-  return true;
+  return false;
 }
 
 /*

@@ -1,9 +1,9 @@
 # Notes
-- don't change item border color on exit or enter, set color in item_window_render
 - take new screenshots
 - fix stocks_window_enter or remove it (fix switching from chart back to either search or list item)
 - fix: search text disappears when it is too long to print (tui_text_render h -> 0)
 - tui_list_event should not increase index if item window is not visable
+- when is_atomic windows become invisable, other windows (ex chart) should take place
 
 ## Duplicate
 - tui_..._window_..._search (only tui_window_t** windows and size_t count is needed)

@@ -47,26 +47,6 @@ void parent_window_enter(tui_window_t* head)
 }
 
 /*
- * Enter event for item window, make border yellow
- */
-void item_window_enter(tui_window_t* head)
-{
-  tui_window_parent_t* window = (tui_window_parent_t*) head;
-
-  window->border.color.fg = TUI_COLOR_YELLOW;
-}
-
-/*
- * Exit event for item window, hide border
- */
-void item_window_exit(tui_window_t* head)
-{
-  tui_window_parent_t* window = (tui_window_parent_t*) head;
-
-  window->border.color.fg = TUI_COLOR_NONE;
-}
-
-/*
  * Data for stocks window
  */
 typedef struct stocks_data_t
@@ -1014,6 +994,7 @@ void stock_window_init(tui_window_t* head)
     .data         = data,
     .align        = TUI_ALIGN_CENTER,
     .w_grow       = true,
+    .is_atomic    = true,
   });
 }
 
@@ -1086,22 +1067,43 @@ void item_window_render(tui_window_t* head)
 {
   tui_window_parent_t* window = (tui_window_parent_t*) head;
 
+  window->border.color.fg = TUI_COLOR_NONE;
+
   stock_t* stock = head->data;
 
   if (!stock) return;
 
+  tui_window_parent_t* list_window = head->parent;
+
+  if (list_window)
+  {
+    stocks_data_t* stocks_data = list_window->head.data;
+
+    if (stocks_data)
+    {
+      tui_list_t* list = stocks_data->list;
+
+      if (list && list->item_count > 0 &&
+          list->items[list->item_index] == head &&
+          head->tui->window == head)
+      {
+        window->border.color.fg = TUI_COLOR_YELLOW;
+      }
+    }
+  }
+
   tui_window_parent_t* stock_window = tui_window_window_parent_search(head, ". . . stock");
 
-  if (!stock_window) return;
-
-  stock_data_t* stock_data = stock_window->head.data;
-
-  if (!stock_data) return;
-
-  if (head->tui->window == (tui_window_t*) stock_data->chart && 
-      stock_data->stock == stock)
+  if (stock_window)
   {
-    window->border.color.fg = TUI_COLOR_WHITE;
+    stock_data_t* stock_data = stock_window->head.data;
+
+    if (stock_data &&
+        head->tui->window == (tui_window_t*) stock_data->chart &&
+        stock_data->stock == stock)
+    {
+      window->border.color.fg = TUI_COLOR_WHITE;
+    }
   }
 }
 
@@ -1165,6 +1167,32 @@ void item_window_init(tui_window_t* head)
     .rect  = TUI_RECT_NONE,
     .align = TUI_ALIGN_END,
   });
+}
+
+/*
+ * Update list window, change item if it is invisable
+ */
+void list_window_update(tui_window_t* head)
+{
+  stocks_data_t* data = head->data;
+
+  if (!data) return;
+
+  tui_list_t* list = data->list;
+
+  if (list && list->item_count > 0)
+  {
+    tui_window_t* last_item = list->items[list->item_index];
+
+    tui_list_item_update(list);
+
+    tui_window_t* curr_item = list->items[list->item_index];
+
+    if (head->tui->window == last_item && curr_item != last_item)
+    {
+      tui_window_set(head->tui, curr_item);
+    }
+  }
 }
 
 /*
@@ -1251,8 +1279,6 @@ void list_window_init(tui_window_t* head)
       },
       .event.init   = &item_window_init,
       .event.free   = &item_window_free,
-      .event.enter  = &item_window_enter,
-      .event.exit   = &item_window_exit,
       .event.key    = &item_window_key,
       .event.update = &item_window_update,
       .event.render = &item_window_render,
@@ -1445,20 +1471,21 @@ void stocks_window_init(tui_window_t* head)
 
   tui_parent_child_parent_create(stocks_window, (tui_window_parent_config_t)
   {
-    .name        = "list",
-    .rect        = TUI_RECT_NONE,
-    .data        = data,
-    .event.init  = &list_window_init,
-    .event.key   = &list_window_key,
-    .event.enter = &list_window_enter,
-    .is_vertical = true,
-    .h_grow      = true,
-    .border      = (tui_border_t)
+    .name         = "list",
+    .rect         = TUI_RECT_NONE,
+    .data         = data,
+    .event.init   = &list_window_init,
+    .event.key    = &list_window_key,
+    .event.enter  = &list_window_enter,
+    .event.update = &list_window_update,
+    .is_vertical  = true,
+    .h_grow       = true,
+    .border       = (tui_border_t)
     {
-      .is_active = true,
-      .color.fg  = TUI_COLOR_WHITE,
+      .is_active  = true,
+      .color.fg   = TUI_COLOR_WHITE,
     },
-    .is_interact = true,
+    .is_interact  = true,
   });
 }
 
