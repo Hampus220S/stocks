@@ -3,6 +3,7 @@
 !README.md
 !NOTES.md
 !debug.h
+!file.h
 !tui.h
 !stock.h
 !makefile

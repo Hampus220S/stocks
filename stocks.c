@@ -10,6 +10,9 @@
 #define DEBUG_IMPLEMENT
 #include "debug.h"
 
+#define FILE_IMPLEMENT
+#include "file.h"
+
 #define STOCK_IMPLEMENT
 #include "stock.h"
 
@@ -1283,16 +1286,17 @@ void list_window_init(tui_window_t* head)
 
   stocks_data_t* data = head->data;
 
-  char* symbols[] =
-  {
-    "SEK=X",
-    "^OMX",
-    "AAPL",
-    "TSLA",
-    "SPGI",
-  };
+  char stocks_file[64];
 
-  for (size_t index = 0; index < 5; index++)
+  sprintf(stocks_file, "%s/.stocks/stocks.txt", getenv("HOME"));
+
+  size_t file_size = file_size_get(stocks_file);
+
+  char** symbols = NULL;
+
+  size_t count = file_lines_read(&symbols, file_size, stocks_file);
+
+  for (size_t index = 0; index < count; index++)
   {
     char* symbol = symbols[index];
 
@@ -1321,6 +1325,8 @@ void list_window_init(tui_window_t* head)
 
     tui_list_item_add(data->list, (tui_window_t*) item_window);
   }
+
+  file_lines_free(&symbols, count);
 
   tui_parent_child_text_create(list_window, (tui_window_text_config_t)
   {
