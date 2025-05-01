@@ -1328,6 +1328,15 @@ void list_window_init(tui_window_t* head)
 
   file_lines_free(&symbols, count);
 
+  // Creating invisable window to give list window some min structure
+  tui_parent_child_text_create(list_window, (tui_window_text_config_t)
+  {
+    .rect = (tui_rect_t)
+    {
+      .w  = 20,
+    },
+  });
+
   tui_parent_child_text_create(list_window, (tui_window_text_config_t)
   {
     .string = " Stocks ",
@@ -1592,7 +1601,14 @@ void tui_init(tui_t* tui)
  */
 int main(int argc, char* argv[])
 {
-  debug_file_open("debug.log");
+  char debug_file[64];
+
+  if (sprintf(debug_file, "%s/.stocks/debug.log", getenv("HOME")) < 0)
+  {
+    return 1;
+  }
+
+  debug_file_open(debug_file);
 
   tui_t* tui = tui_create((tui_config_t)
   {
