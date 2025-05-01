@@ -3,7 +3,7 @@
  *
  * Written by Hampus Fridholm
  *
- * Last updated: 2025-04-20
+ * Last updated: 2025-04-30
  */
 
 #ifndef TUI_H
@@ -79,7 +79,8 @@ typedef struct tui_menu_event_t
  */
 typedef struct tui_event_t
 {
-  bool (*key) (tui_t* tui, int key);
+  bool (*key)  (tui_t* tui, int key);
+  void (*init) (tui_t* tui);
 } tui_event_t;
 
 /*
@@ -171,12 +172,16 @@ typedef enum tui_window_type_t
  * Window struct
  *
  * is_contain window can't be the largest child in parent
+ *
+ * is_atomic window either contain all it's content or is invisable
  */
 typedef struct tui_window_t
 {
   tui_window_type_t    type;
   char*                name;
+  bool                 is_atomic;
   bool                 is_hidden;
+  bool                 _is_visable;
   bool                 is_interact;
   bool                 is_contain;
   bool                 w_grow;
@@ -436,11 +441,11 @@ void tui_border_draw(tui_window_parent_t* window)
 }
 
 /*
- * Initialize tui colors
+ * Initialize tui ncurses colors
  *
  * ncurses color and index differ by 1
  */
-void tui_colors_init(void)
+void tui_ncurses_colors_init(void)
 {
   for (short fg_index = 0; fg_index < 9; fg_index++)
   {
@@ -459,7 +464,7 @@ void tui_colors_init(void)
 /*
  * Initialize tui (ncurses)
  */
-int tui_init(void)
+int tui_ncurses_init(void)
 {
   initscr();
   noecho();
@@ -475,7 +480,7 @@ int tui_init(void)
 
   use_default_colors();
 
-  tui_colors_init();
+  tui_ncurses_colors_init();
 
   clear();
   refresh();
@@ -486,7 +491,7 @@ int tui_init(void)
 /*
  * Quit tui (ncurses)
  */
-void tui_quit(void)
+void tui_ncurses_quit(void)
 {
   clear();
 
@@ -594,14 +599,21 @@ typedef struct tui_config_t
 } tui_config_t;
 
 /*
- * Create tui struct
+ * Create tui struct and initialize ncurses
  */
 tui_t* tui_create(tui_config_t config)
 {
+  if (tui_ncurses_init() != 0)
+  {
+    return NULL;
+  }
+
   tui_t* tui = malloc(sizeof(tui_t));
 
   if (!tui)
   {
+    tui_ncurses_quit();
+
     return NULL;
   }
 
@@ -614,6 +626,11 @@ tui_t* tui_create(tui_config_t config)
     .event  = config.event,
     .color  = config.color
   };
+
+  if (tui->event.init)
+  {
+    tui->event.init(tui);
+  }
 
   return tui;
 }
@@ -728,7 +745,7 @@ static inline void tui_menu_free(tui_menu_t** menu)
 }
 
 /*
- * Delete (free) tui struct
+ * Delete (free) tui struct and quit ncurses
  */
 void tui_delete(tui_t** tui)
 {
@@ -746,6 +763,8 @@ void tui_delete(tui_t** tui)
   free(*tui);
 
   *tui = NULL;
+
+  tui_ncurses_quit();
 }
 
 /*
@@ -1237,7 +1256,12 @@ static inline void tui_window_parent_render(tui_window_parent_t* window)
   // Render children
   for (size_t index = 0; index < window->child_count; index++)
   {
-    tui_window_render(window->children[index]);
+    tui_window_t* child = window->children[index];
+
+    if (child->_is_visable)
+    {
+      tui_window_render(child);
+    }
   }
   
   overwrite(head->window, parent);
@@ -1279,7 +1303,12 @@ static inline void tui_windows_render(tui_window_t** windows, size_t count)
 {
   for (size_t index = count; index-- > 0;)
   {
-    tui_window_render(windows[index]);
+    tui_window_t* window = windows[index];
+
+    if (window->_is_visable)
+    {
+      tui_window_render(window);
+    }
   }
 }
 
@@ -1379,8 +1408,8 @@ static inline void tui_window_parent_size_calc(tui_window_parent_t* parent)
   }
   else if (parent->children && parent->child_count)
   {
-    tui_size_t align_size = (tui_size_t) { 0 };
-    tui_size_t max_size   = (tui_size_t) { 0 };
+    tui_size_t align_size = { 0 };
+    tui_size_t max_size   = { 0 };
 
     size_t align_count = 0;
 
@@ -1563,7 +1592,7 @@ static inline int tui_child_h_get(tui_window_t* child, int max_h)
  *
  * align_count and align_index must be int, because they are used in integer arithmetic
  */
-static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
+static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
 {
   if (*align_index == 0)
   {
@@ -1617,7 +1646,8 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
 
     h_gap += gap;
 
-    if (h_space - gap * (align_count - 1) >= *align_index)
+    // Add extra gap between first windows
+    if (h_space - gap * (align_count - 1) > *align_index)
     {
       h_gap += 1;
     }
@@ -1648,16 +1678,12 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
 
       rect->y += (float) parent->align / 2.f * h_space;
     }
-    else if (parent->has_gap)
+
+    if (parent->has_gap)
     {
       // Add this gap after current child
       h_gap += 1;
     }
-  }
-
-  if (*align_index > 0)
-  {
-    rect->y += last_child->_rect.h + h_gap;
   }
 
   int w = tui_child_w_get(child, max_size.w);
@@ -1667,7 +1693,14 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
 
   if (rect->y + h > max_size.h + end_y)
   {
-    h = max_size.h + end_y - rect->y;
+    if (child->is_atomic)
+    {
+      h = 0;
+    }
+    else
+    {
+      h = max_size.h + end_y - rect->y;
+    }
   }
 
   rect->w = w;
@@ -1676,12 +1709,16 @@ static inline void tui_child_vert_rect_calc(tui_rect_t* rect, tui_window_parent_
   rect->x += (float) parent->pos / 2.f * (max_size.w - w);
 
   (*align_index)++;
+
+  child->_rect = *rect;
+
+  rect->y += child->_rect.h + h_gap;
 }
 
 /*
  * Calculate rect of horizontally aligned child
  */
-static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
+static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
 {
   if (*align_index == 0)
   {
@@ -1724,7 +1761,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
     if (parent->has_gap)
     {
       // Add this gap after current child
-      w_gap += 1;
+      w_gap += 2;
     }
   }
   else if (parent->align == TUI_ALIGN_BETWEEN)
@@ -1735,7 +1772,7 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
     w_gap += gap;
 
     // Add extra gap between first windows
-    if (w_space - gap * (align_count - 1) >= *align_index)
+    if (w_space - gap * (align_count - 1) > *align_index)
     {
       w_gap += 1;
     }
@@ -1767,16 +1804,12 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
 
       rect->x += (float) parent->align / 2.f * w_space;
     }
-    else if (parent->has_gap)
+
+    if (parent->has_gap)
     {
       // Add this gap after current child
       w_gap += 2;
     }
-  }
-
-  if (*align_index > 0)
-  {
-    rect->x += last_child->_rect.w + w_gap;
   }
 
   int h = tui_child_h_get(child, max_size.h);
@@ -1786,7 +1819,14 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
 
   if (rect->x + w > max_size.w + end_x)
   {
-    w = max_size.w + end_x - rect->x;
+    if (child->is_atomic)
+    {
+      w = 0;
+    }
+    else
+    {
+      w = max_size.w + end_x - rect->x;
+    }
   }
 
   rect->w = w;
@@ -1795,20 +1835,24 @@ static inline void tui_child_horiz_rect_calc(tui_rect_t* rect, tui_window_parent
   rect->y += (float) parent->pos / 2.f * (max_size.h - h);
 
   (*align_index)++;
+
+  child->_rect = *rect;
+
+  rect->x += child->_rect.w + w_gap;
 }
 
 /*
  * Calculate rect of aligned child
  */
-static inline void tui_child_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_window_t* last_child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
+static inline void tui_child_rect_calc(tui_rect_t* rect, tui_window_parent_t* parent, tui_window_t* child, tui_size_t max_size, tui_size_t align_size, int align_count, int* align_index, int grow_count, int* grow_index)
 {
   if (parent->is_vertical)
   {
-    tui_child_vert_rect_calc(rect, parent, child, last_child, max_size, align_size, align_count, align_index, grow_count, grow_index);
+    tui_child_vert_rect_calc(rect, parent, child, max_size, align_size, align_count, align_index, grow_count, grow_index);
   }
   else
   {
-    tui_child_horiz_rect_calc(rect, parent, child, last_child, max_size, align_size, align_count, align_index, grow_count, grow_index);
+    tui_child_horiz_rect_calc(rect, parent, child, max_size, align_size, align_count, align_index, grow_count, grow_index);
   }
 }
 
@@ -1841,52 +1885,40 @@ static inline tui_rect_t tui_window_rect_get(tui_rect_t rect, int parent_w, int 
 }
 
 /*
- * Calculate rect of parent's children
+ * Hide window by setting _is_visable to false
  *
- * Make use of the temporarily stored sizes in _rect
+ * If window is parent, hide children recursivly
  */
-static inline void tui_children_rect_calc(tui_window_parent_t* parent)
+static inline void tui_window_set_invisable(tui_window_t* window)
 {
-  tui_size_t align_size = (tui_size_t) { 0 };
-
-  size_t align_count = 0;
-
-  size_t grow_count = 0;
-
-  for (size_t index = 0; index < parent->child_count; index++)
+  if (window)
   {
-    tui_window_t* child = parent->children[index];
+    window->_is_visable = false;
 
-    if (child->rect.is_none)
+    if (window->type == TUI_WINDOW_PARENT)
     {
-      align_count++;
+      tui_window_parent_t* parent = (tui_window_parent_t*) window;
 
-      if (parent->is_vertical)
+      for (size_t index = 0; index < parent->child_count; index++)
       {
-        align_size.h += child->_rect.h;
+        tui_window_t* child = parent->children[index];
 
-        align_size.w = MAX(align_size.w, child->_rect.w);
-
-        if (child->h_grow)
-        {
-          grow_count++;
-        }
-      }
-      else
-      {
-        align_size.w += child->_rect.w;
-
-        align_size.h = MAX(align_size.h, child->_rect.h);
-
-        if (child->w_grow)
-        {
-          grow_count++;
-        }
+        tui_window_set_invisable(child);
       }
     }
   }
+}
 
-  tui_size_t max_size = { parent->head._rect.w, parent->head._rect.h };
+/*
+ * Get maximum content size of parent
+ */
+static inline tui_size_t tui_max_size_get(tui_window_parent_t* parent)
+{
+  tui_size_t max_size =
+  {
+    .w = parent->head._rect.w,
+    .h = parent->head._rect.h
+  };
 
   if (parent->has_padding)
   {
@@ -1900,15 +1932,93 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
     max_size.h -= 2;
   }
 
-  // Limit size to parent's size
-  align_size.w = MIN(align_size.w, max_size.w);
+  return max_size;
+}
 
+/*
+ * Calculate rect of parent's children
+ *
+ * Make use of the temporarily stored sizes in _rect
+ */
+static inline void tui_children_rect_calc(tui_window_parent_t* parent)
+{
+  tui_size_t max_size = tui_max_size_get(parent);
+
+  tui_size_t align_size = { 0 };
+
+  size_t align_count = 0;
+  size_t grow_count  = 0;
+
+  for (size_t index = 0; index < parent->child_count; index++)
+  {
+    tui_window_t* child = parent->children[index];
+
+    if (!child->rect.is_none)
+    {
+      child->_is_visable = !child->is_hidden;
+
+      continue;
+    }
+
+    if (child->is_hidden)
+    {
+      child->_is_visable = false;
+    }
+    else if (parent->is_vertical)
+    {
+      if (child->is_atomic &&
+         (align_size.h + child->_rect.h > max_size.h ||
+          child->_rect.w > max_size.w))
+      {
+        child->_is_visable = false;
+
+        continue;
+      }
+
+      child->_is_visable = true;
+
+      align_count++;
+
+      align_size.h += child->_rect.h;
+
+      align_size.w = MAX(align_size.w, child->_rect.w);
+
+      if (child->h_grow)
+      {
+        grow_count++;
+      }
+    }
+    else
+    {
+      if (child->is_atomic &&
+         (align_size.w + child->_rect.w > max_size.w ||
+          child->_rect.h > max_size.h))
+      {
+        child->_is_visable = false;
+
+        continue;
+      }
+
+      child->_is_visable = true;
+
+      align_count++;
+
+      align_size.w += child->_rect.w;
+
+      align_size.h = MAX(align_size.h, child->_rect.h);
+
+      if (child->w_grow)
+      {
+        grow_count++;
+      }
+    }
+  }
+
+  align_size.w = MIN(align_size.w, max_size.w);
   align_size.h = MIN(align_size.h, max_size.h);
 
   // x and y is stored temporarily for children
   tui_rect_t rect = { 0 };
-
-  tui_window_t* last_child = NULL;
 
   int align_index = 0;
   int grow_index  = 0;
@@ -1917,13 +2027,16 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
   {
     tui_window_t* child = parent->children[index];
 
+    if (!child->_is_visable)
+    {
+      tui_window_set_invisable(child);
+
+      continue;
+    }
+
     if (child->rect.is_none)
     {
-      tui_child_rect_calc(&rect, parent, child, last_child, max_size, align_size, align_count, &align_index, grow_count, &grow_index);
-
-      child->_rect = rect;
-
-      last_child = child;
+      tui_child_rect_calc(&rect, parent, child, max_size, align_size, align_count, &align_index, grow_count, &grow_index);
     }
     else
     {
@@ -1932,35 +2045,62 @@ static inline void tui_children_rect_calc(tui_window_parent_t* parent)
       child->_rect = tui_window_rect_get(child->rect, parent_rect.w, parent_rect.h);
     }
 
-    // Move child window into parent window
-    child->_rect.x += parent->head._rect.x;
-
-    child->_rect.y += parent->head._rect.y;
-
-    child->window = tui_ncurses_window_update(child->window, child->_rect);
-
-    if (child->type == TUI_WINDOW_PARENT)
+    if (child->_rect.w == 0 || child->_rect.h == 0)
     {
-      tui_children_rect_calc((tui_window_parent_t*) child);
+      tui_window_set_invisable(child);
+    }
+    else
+    {
+      child->_is_visable = true;
+
+      // Move child window into parent window
+      child->_rect.x += parent->head._rect.x;
+      child->_rect.y += parent->head._rect.y;
+
+      child->window = tui_ncurses_window_update(child->window, child->_rect);
+
+      if (child->type == TUI_WINDOW_PARENT)
+      {
+        tui_children_rect_calc((tui_window_parent_t*) child);
+      }
     }
   }
 }
 
 /*
  * Calculate rect of window
+ *
+ * The content of this function is similar to
+ * the content of the for loop in tui_children_rect_calc
  */
 static inline void tui_window_rect_calc(tui_window_t* window, int w, int h)
 {
+  if (window->is_hidden)
+  {
+    tui_window_set_invisable(window);
+
+    return;
+  }
+
   if (!window->rect.is_none)
   {
     window->_rect = tui_window_rect_get(window->rect, w, h);
   }
 
-  window->window = tui_ncurses_window_update(window->window, window->_rect);
-
-  if(window->type == TUI_WINDOW_PARENT)
+  if (window->_rect.w == 0 || window->_rect.h == 0)
   {
-    tui_children_rect_calc((tui_window_parent_t*) window);
+    tui_window_set_invisable(window);
+  }
+  else
+  {
+    window->_is_visable = true;
+
+    window->window = tui_ncurses_window_update(window->window, window->_rect);
+
+    if(window->type == TUI_WINDOW_PARENT)
+    {
+      tui_children_rect_calc((tui_window_parent_t*) window);
+    }
   }
 }
 
@@ -2124,6 +2264,7 @@ typedef struct tui_window_parent_config_t
   bool               h_grow;
   tui_color_t        color;
   bool               is_hidden;
+  bool               is_atomic;
   bool               is_interact;
   bool               is_contain;
   tui_border_t       border;
@@ -2156,7 +2297,9 @@ static inline tui_window_parent_t* _tui_window_parent_create(tui_t* tui, tui_win
     .rect        = config.rect,
     .w_grow      = config.w_grow,
     .h_grow      = config.h_grow,
+    .is_atomic   = config.is_atomic,
     .is_hidden   = config.is_hidden,
+    ._is_visable = !config.is_hidden,
     .is_interact = config.is_interact,
     .is_contain  = config.is_contain,
     .color       = config.color,
@@ -2218,6 +2361,7 @@ typedef struct tui_window_text_config_t
   bool               h_grow;
   tui_color_t        color;
   bool               is_hidden;
+  bool               is_atomic;
   bool               is_interact;
   bool               is_contain;
   char*              string;
@@ -2248,7 +2392,9 @@ static inline tui_window_text_t* _tui_window_text_create(tui_t* tui, tui_window_
     .rect        = config.rect,
     .w_grow      = config.w_grow,
     .h_grow      = config.h_grow,
+    .is_atomic   = config.is_atomic,
     .is_hidden   = config.is_hidden,
+    ._is_visable = !config.is_hidden,
     .is_interact = config.is_interact,
     .is_contain  = config.is_contain,
     .color       = config.color,
@@ -2284,6 +2430,7 @@ typedef struct tui_window_grid_config_t
   bool               h_grow;
   tui_color_t        color;
   bool               is_hidden;
+  bool               is_atomic;
   bool               is_interact;
   bool               is_contain;
   tui_size_t         size;
@@ -2341,7 +2488,9 @@ static inline tui_window_grid_t* _tui_window_grid_create(tui_t* tui, tui_window_
     .rect        = config.rect,
     .w_grow      = config.w_grow,
     .h_grow      = config.h_grow,
+    .is_atomic   = config.is_atomic,
     .is_hidden   = config.is_hidden,
+    ._is_visable = !config.is_hidden,
     .is_interact = config.is_interact,
     .is_contain  = config.is_contain,
     .color       = config.color,
@@ -2375,8 +2524,6 @@ static inline int tui_windows_window_append(tui_window_t*** windows, size_t* cou
 
   if (!temp_windows)
   {
-    info_print("tui_windows_window_append realloc: %s", strerror(errno));
-
     return 1;
   }
 
@@ -2990,6 +3137,45 @@ int tui_list_item_add(tui_list_t* list, tui_window_t* item)
 }
 
 /*
+ * Update list item by changing to another if it is invisable
+ *
+ * RETURN (bool changed)
+ */
+bool tui_list_item_update(tui_list_t* list)
+{
+  tui_window_t* item = list->items[list->item_index];
+
+  if (!item->_is_visable)
+  {
+    for (size_t index = list->item_index + 1; index < list->item_count; index++)
+    {
+      item = list->items[index];
+
+      if (item->_is_visable)
+      {
+        list->item_index = index;
+
+        return true;
+      }
+    }
+
+    for (size_t index = list->item_index; index-- > 0;)
+    {
+      item = list->items[index];
+
+      if (item->_is_visable)
+      {
+        list->item_index = index;
+
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/*
  * Create list struct
  */
 tui_list_t* tui_list_create(tui_t* tui, bool is_vertical)
@@ -3031,14 +3217,19 @@ void tui_list_delete(tui_list_t** list)
  */
 static inline bool tui_list_scroll_forward(tui_list_t* list)
 {
-  if (list->item_index >= (list->item_count - 1))
+  for (size_t index = list->item_index + 1; index < list->item_count; index++)
   {
-    return false;
+    tui_window_t* window = list->items[index];
+
+    if (window && window->_is_visable)
+    {
+      list->item_index = index;
+
+      return true;
+    }
   }
 
-  list->item_index++;
-
-  return true;
+  return false;
 }
 
 /*
@@ -3046,14 +3237,19 @@ static inline bool tui_list_scroll_forward(tui_list_t* list)
  */
 static inline bool tui_list_scroll_backward(tui_list_t* list)
 {
-  if (list->item_index <= 0)
+  for (size_t index = list->item_index; index-- > 0;)
   {
-    return false;
+    tui_window_t* window = list->items[index];
+
+    if (window && window->_is_visable)
+    {
+      list->item_index = index;
+
+      return true;
+    }
   }
 
-  list->item_index--;
-
-  return true;
+  return false;
 }
 
 /*
@@ -3094,7 +3290,7 @@ bool tui_list_event(tui_list_t* list, int key)
 }
 
 /*
- * Set window to active window
+ * Set window to active window, but only if it is visable
  *
  * Call enter event for new window and exit event for old window
  *
@@ -3102,25 +3298,26 @@ bool tui_list_event(tui_list_t* list, int key)
  */
 void tui_window_set(tui_t* tui, tui_window_t* window)
 {
-  if (tui->window == window) return;
-
-  tui_window_t* last_window = tui->window;
-
-  tui->window = window;
-
-  if (last_window && last_window->event.exit)
+  if (tui->window != window && window->_is_visable)
   {
-    last_window->event.exit(last_window);
-  }
+    tui_window_t* last_window = tui->window;
 
-  if (window && window->event.enter)
-  {
-    window->event.enter(window);
-  }
+    tui->window = window;
 
-  if (window->menu)
-  {
-    tui->menu = window->menu;
+    if (last_window && last_window->event.exit)
+    {
+      last_window->event.exit(last_window);
+    }
+
+    if (window && window->event.enter)
+    {
+      window->event.enter(window);
+    }
+
+    if (window->menu)
+    {
+      tui->menu = window->menu;
+    }
   }
 }
 
@@ -3282,7 +3479,7 @@ static bool tui_windows_tab_forward(tui_t* tui, tui_window_t** windows, size_t c
   {
     tui_window_t* window = windows[index];
 
-    if (!window->is_hidden && window->is_interact)
+    if (window->_is_visable && window->is_interact)
     {
       tui_window_set(tui, window);
 
@@ -3403,7 +3600,7 @@ static bool tui_windows_tab_backward(tui_t* tui, tui_window_t** windows, size_t 
   {
     tui_window_t* window = windows[index];
 
-    if (!window->is_hidden && window->is_interact)
+    if (window->_is_visable && window->is_interact)
     {
       tui_window_set(tui, window);
 

@@ -47,26 +47,6 @@ void parent_window_enter(tui_window_t* head)
 }
 
 /*
- * Enter event for item window, make border yellow
- */
-void item_window_enter(tui_window_t* head)
-{
-  tui_window_parent_t* window = (tui_window_parent_t*) head;
-
-  window->border.color.fg = TUI_COLOR_YELLOW;
-}
-
-/*
- * Exit event for item window, hide border
- */
-void item_window_exit(tui_window_t* head)
-{
-  tui_window_parent_t* window = (tui_window_parent_t*) head;
-
-  window->border.color.fg = TUI_COLOR_NONE;
-}
-
-/*
  * Data for stocks window
  */
 typedef struct stocks_data_t
@@ -908,6 +888,7 @@ void chart_prices_init(tui_window_t* head)
     .data         = data,
     .h_grow       = true,
     .w_grow       = true,
+    .is_atomic    = true,
   });
 
   data->chart = chart_window;
@@ -955,6 +936,24 @@ void chart_parent_init(tui_window_t* head)
     .event.update = &range_window_update,
     .data         = data,
   });
+
+  tui_window_text_t* value_window = tui_parent_child_text_create(chart_parent, (tui_window_text_config_t)
+  {
+    .string       = "",
+    .rect         = (tui_rect_t)
+    {
+      .y          = TUI_PARENT_H - 2,
+      .w          = TUI_PARENT_W,
+      .h          = 1,
+    },
+    .event.update = &value_window_update,
+    .color.fg     = TUI_COLOR_YELLOW,
+    .align        = TUI_ALIGN_CENTER,
+    .w_grow       = true,
+    .data         = data,
+  });
+
+  data->window = value_window;
 }
 
 /*
@@ -986,19 +985,6 @@ void stock_window_init(tui_window_t* head)
     .event.init  = &chart_parent_init,
   });
 
-  tui_window_text_t* value_window = tui_parent_child_text_create(stock_window, (tui_window_text_config_t)
-  {
-    .string       = "",
-    .rect         = TUI_RECT_NONE,
-    .event.update = &value_window_update,
-    .color.fg     = TUI_COLOR_YELLOW,
-    .align        = TUI_ALIGN_CENTER,
-    .w_grow       = true,
-    .data         = data,
-  });
-
-  data->window = value_window;
-
   tui_parent_child_parent_create(stock_window, (tui_window_parent_config_t)
   {
     .border       = (tui_border_t)
@@ -1014,6 +1000,7 @@ void stock_window_init(tui_window_t* head)
     .data         = data,
     .align        = TUI_ALIGN_CENTER,
     .w_grow       = true,
+    .is_atomic    = true,
   });
 }
 
@@ -1086,22 +1073,43 @@ void item_window_render(tui_window_t* head)
 {
   tui_window_parent_t* window = (tui_window_parent_t*) head;
 
+  window->border.color.fg = TUI_COLOR_NONE;
+
   stock_t* stock = head->data;
 
   if (!stock) return;
 
+  tui_window_parent_t* list_window = head->parent;
+
+  if (list_window)
+  {
+    stocks_data_t* stocks_data = list_window->head.data;
+
+    if (stocks_data)
+    {
+      tui_list_t* list = stocks_data->list;
+
+      if (list && list->item_count > 0 &&
+          list->items[list->item_index] == head &&
+          head->tui->window == head)
+      {
+        window->border.color.fg = TUI_COLOR_YELLOW;
+      }
+    }
+  }
+
   tui_window_parent_t* stock_window = tui_window_window_parent_search(head, ". . . stock");
 
-  if (!stock_window) return;
-
-  stock_data_t* stock_data = stock_window->head.data;
-
-  if (!stock_data) return;
-
-  if (head->tui->window == (tui_window_t*) stock_data->chart && 
-      stock_data->stock == stock)
+  if (stock_window)
   {
-    window->border.color.fg = TUI_COLOR_WHITE;
+    stock_data_t* stock_data = stock_window->head.data;
+
+    if (stock_data &&
+        head->tui->window == (tui_window_t*) stock_data->chart &&
+        stock_data->stock == stock)
+    {
+      window->border.color.fg = TUI_COLOR_WHITE;
+    }
   }
 }
 
@@ -1124,20 +1132,29 @@ void item_window_update(tui_window_t* head)
 
   if (symbol_window)
   {
-    sprintf(buffer, "%s    ", stock->symbol);
+    sprintf(buffer, "%s   ", stock->symbol);
 
     tui_window_text_string_set(symbol_window, buffer);
   }
 
-  tui_window_text_t* value_window = tui_window_window_text_search((tui_window_t*) item_window, "value");
+  tui_window_text_t* price_window = tui_window_window_text_search((tui_window_t*) item_window, "value price");
 
-  if (value_window)
+  if (price_window)
   {
     sprintf(buffer, "%.2f", stock->close);
 
-    tui_window_text_string_set(value_window, buffer);
+    tui_window_text_string_set(price_window, buffer);
+  }
 
-    value_window->head.color.fg = color;
+  tui_window_text_t* diff_window = tui_window_window_text_search((tui_window_t*) item_window, "value diff");
+
+  if (diff_window)
+  {
+    sprintf(buffer, "%+.2f", stock->close - stock->open);
+
+    tui_window_text_string_set(diff_window, buffer);
+
+    diff_window->head.color.fg = color;
   }
 }
 
@@ -1159,12 +1176,54 @@ void item_window_init(tui_window_t* head)
     .align = TUI_ALIGN_START,
   });
 
-  tui_parent_child_text_create(item_window, (tui_window_text_config_t)
+  tui_window_parent_t* value_window = tui_parent_child_parent_create(item_window, (tui_window_parent_config_t)
   {
-    .name  = "value",
-    .rect  = TUI_RECT_NONE,
-    .align = TUI_ALIGN_END,
+    .name        = "value",
+    .rect        = TUI_RECT_NONE,
+    .is_vertical = true,
   });
+
+  tui_parent_child_text_create(value_window, (tui_window_text_config_t)
+  {
+    .name   = "price",
+    .rect   = TUI_RECT_NONE,
+    .align  = TUI_ALIGN_END,
+    .w_grow = true,
+  });
+
+  tui_parent_child_text_create(value_window, (tui_window_text_config_t)
+  {
+    .name   = "diff",
+    .rect   = TUI_RECT_NONE,
+    .align  = TUI_ALIGN_END,
+    .w_grow = true,
+  });
+}
+
+/*
+ * Update list window, change item if it is invisable
+ */
+void list_window_update(tui_window_t* head)
+{
+  stocks_data_t* data = head->data;
+
+  if (!data) return;
+
+  tui_list_t* list = data->list;
+
+  if (list && list->item_count > 0)
+  {
+    tui_window_t* last_item = list->items[list->item_index];
+
+    tui_list_item_update(list);
+
+    tui_window_t* curr_item = list->items[list->item_index];
+
+    if (head->tui->window == last_item && curr_item != last_item)
+    {
+      tui_window_set(head->tui, curr_item);
+    }
+  }
 }
 
 /*
@@ -1251,14 +1310,13 @@ void list_window_init(tui_window_t* head)
       },
       .event.init   = &item_window_init,
       .event.free   = &item_window_free,
-      .event.enter  = &item_window_enter,
-      .event.exit   = &item_window_exit,
       .event.key    = &item_window_key,
       .event.update = &item_window_update,
       .event.render = &item_window_render,
       .data         = stock,
       .align        = TUI_ALIGN_BETWEEN,
       .w_grow       = true,
+      .is_atomic    = true,
     });
 
     tui_list_item_add(data->list, (tui_window_t*) item_window);
@@ -1444,20 +1502,21 @@ void stocks_window_init(tui_window_t* head)
 
   tui_parent_child_parent_create(stocks_window, (tui_window_parent_config_t)
   {
-    .name        = "list",
-    .rect        = TUI_RECT_NONE,
-    .data        = data,
-    .event.init  = &list_window_init,
-    .event.key   = &list_window_key,
-    .event.enter = &list_window_enter,
-    .is_vertical = true,
-    .h_grow      = true,
-    .border      = (tui_border_t)
+    .name         = "list",
+    .rect         = TUI_RECT_NONE,
+    .data         = data,
+    .event.init   = &list_window_init,
+    .event.key    = &list_window_key,
+    .event.enter  = &list_window_enter,
+    .event.update = &list_window_update,
+    .is_vertical  = true,
+    .h_grow       = true,
+    .border       = (tui_border_t)
     {
-      .is_active = true,
-      .color.fg  = TUI_COLOR_WHITE,
+      .is_active  = true,
+      .color.fg   = TUI_COLOR_WHITE,
     },
-    .is_interact = true,
+    .is_interact  = true,
   });
 }
 
@@ -1479,7 +1538,6 @@ void root_window_init(tui_window_t* head)
     .is_vertical = true,
     .h_grow      = true,
     .is_interact = true,
-    .has_gap     = true,
   });
 
   tui_parent_child_parent_create(root_window, (tui_window_parent_config_t)
@@ -1503,13 +1561,24 @@ void menu_init(tui_menu_t* menu)
   {
     .name        = "root",
     .rect        = TUI_PARENT_RECT,
-    .align       = TUI_ALIGN_CENTER,
-    .pos         = TUI_POS_CENTER,
     .event.enter = &parent_window_enter,
     .event.init  = &root_window_init,
     .has_padding = true,
-    .has_gap     = true,
   });
+}
+
+/*
+ * Initialize tui
+ */
+void tui_init(tui_t* tui)
+{
+  tui_menu_t* menu = tui_menu_create(tui, (tui_menu_config_t)
+  {
+    .event.init = &menu_init,
+  });
+
+  // Set list window as the active window
+  tui_menu_window_search_set(menu, "root stocks list");
 }
 
 /*
@@ -1519,58 +1588,24 @@ int main(int argc, char* argv[])
 {
   debug_file_open("debug.log");
 
-  if(tui_init() != 0)
-  {
-    info_print("Failed to initialize TUI");
-
-    debug_file_close();
-
-    return 1;
-  }
-
-  info_print("Initialized TUI");
-
   tui_t* tui = tui_create((tui_config_t)
   {
-    .event.key = &tab_event,
+    .event.key  = &tab_event,
+    .event.init = &tui_init,
   });
 
   if (!tui)
   {
-    info_print("Failed to create TUI");
-
-    tui_quit();
-
     debug_file_close();
 
     return 2;
   }
 
-  info_print("Created TUI");
-
-  tui_menu_t* menu = tui_menu_create(tui, (tui_menu_config_t)
-  {
-    .event.init = &menu_init,
-  });
-
-  // Set list window as the active window
-  tui_menu_window_search_set(menu, "root stocks list");
-
-  info_print("Starting tui");
-
   tui_start(tui);
-
-  info_print("Stopping tui");
 
   tui_stop(tui);
 
   tui_delete(&tui);
-
-  info_print("Deleted TUI");
-
-  tui_quit();
-
-  info_print("Quitted TUI");
 
   debug_file_close();
 
