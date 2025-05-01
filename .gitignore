@@ -1,14 +1,17 @@
 *
 !.gitignore
+!makefile
 !README.md
 !NOTES.md
+!stocks.desktop
+!stocks.txt
+
+# Source code
 !debug.h
 !file.h
 !tui.h
 !stock.h
-!makefile
 !stocks.c
-!stocks.desktop
 
 # Images
 !stocks.png

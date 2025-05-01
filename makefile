@@ -4,9 +4,13 @@
 # Written by Hampus Fridholm
 #
 
-.PHONY: stocks apt-packages stocks-dir
+ifneq ($(shell uname), Linux)
+	$(error Stocks is only available for Linux)
+endif
 
-default: apt-packages stocks-dir stocks
+.PHONY: apt-packages stocks-dir app
+
+default: apt-packages stocks-dir stocks app
 
 APT_PACKAGES := libjson-c-dev libcurl4-openssl-dev libncurses-dev
 
@@ -15,10 +19,10 @@ STOCKS_DIR := $(HOME)/.stocks
 # Target for initializing stocks directory
 stocks-dir:
 	@echo "Checking if directory $(STOCKS_DIR) exists..."
-	@if [ ! -d "$(STOCKS_DIR)" ]; then \
+	@if [ ! -d $(STOCKS_DIR) ]; then \
 		echo "Directory $(STOCKS_DIR) does not exist. Creating it..."; \
-		mkdir -p "$(STOCKS_DIR)"; \
-		cp "stocks.txt" "$(STOCKS_DIR)/stocks.txt"; \
+		mkdir -p $(STOCKS_DIR); \
+		cp stocks.txt $(STOCKS_DIR)/stocks.txt; \
 	else \
 		echo "Directory $(STOCKS_DIR) already exists."; \
 	fi
@@ -35,6 +39,20 @@ apt-packages:
 		fi \
 	done
 
+APP_FILE := $(HOME)/.local/share/applications/stocks.desktop
+
+# Target for creating desktop application
+app:
+	@echo "Checking if application exists...";
+	@if [ ! -e $(APP_FILE) ]; then \
+		echo "Application does not exist. Creating it..."; \
+		sed -i 's@\/full\/path\/to\/repo@$(shell pwd)@g' stocks.desktop; \
+		chmod +x stocks.desktop; \
+		cp stocks.desktop $(APP_FILE); \
+	else \
+		echo "Application already exist."; \
+	fi
+
 COMPILE_FLAGS := -Wall -g -O0 -std=gnu99 -oFast -Wno-missing-braces
 LINKER_FLAGS  := -lm -lncursesw -lcurl -ljson-c
 
@@ -44,12 +62,15 @@ stocks: stocks.c tui.h stock.h debug.h
 
 # Target for removing stocks from computer
 remove:
-	@echo "Checking if directory $(STOCKS_DIR) exists..."
-	@if [ ! -d "$(STOCKS_DIR)" ]; then \
-		echo "Directory $(STOCKS_DIR) does not exist. Do nothing..."; \
-	else \
-		echo "Directory $(STOCKS_DIR) exists. Removing it..."; \
+	@if [ -d $(STOCKS_DIR) ]; then \
+		echo "Removing directory $(STOCKS_DIR)..."; \
 		rm -r $(STOCKS_DIR); \
 	fi
-	@echo "Removing stocks program"
-	@-rm 2>/dev/null stocks
+	@if [ -e stocks ]; then \
+		echo "Removing stocks program..."; \
+		rm stocks; \
+	fi
+	@if [ -e $(APP_FILE) ]; then \
+		echo "Removing desktop application..."; \
+		rm $(APP_FILE); \
+	fi
