@@ -37,19 +37,6 @@ bool tab_event(tui_t* tui, int key)
 }
 
 /*
- * Generic enter event for parent, enter first child window
- */
-void parent_window_enter(tui_window_t* head)
-{
-  tui_window_parent_t* window = (tui_window_parent_t*) head;
-
-  if (window->child_count > 0)
-  {
-    tui_window_set(head->tui, window->children[0]);
-  }
-}
-
-/*
  * Data for stocks window
  */
 typedef struct stocks_data_t
@@ -1568,6 +1555,19 @@ void root_window_init(tui_window_t* head)
 }
 
 /*
+ * Enter event for root window, enter first child
+ */
+void root_window_enter(tui_window_t* head)
+{
+  tui_window_parent_t* window = (tui_window_parent_t*) head;
+
+  if (window->child_count > 0)
+  {
+    tui_window_set(head->tui, window->children[0]);
+  }
+}
+
+/*
  * Inittialize menu by creating root window
  */
 void menu_init(tui_menu_t* menu)
@@ -1576,7 +1576,7 @@ void menu_init(tui_menu_t* menu)
   {
     .name        = "root",
     .rect        = TUI_PARENT_RECT,
-    .event.enter = &parent_window_enter,
+    .event.enter = &root_window_enter,
     .event.init  = &root_window_init,
     .has_padding = true,
   });
