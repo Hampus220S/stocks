@@ -1,5 +1,4 @@
 # Notes
-- take new screenshots
 - fix stocks_window_enter or remove it (fix switching from chart back to either search or list item)
 - fix: search text disappears when it is too long to print (tui_text_render h -> 0)
 - tui_list_event should not increase index if item window is not visable
