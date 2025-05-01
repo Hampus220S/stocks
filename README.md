@@ -26,28 +26,36 @@ Moving between windows is done either using the **arrow keys**, or by pressing *
 
 To close the program, just press **CTRL+C**
 
+You can choose which stocks should be listed in the stocks program by writing the symbols of the stocks you want in `~/.stocks/stocks.txt` on seperate lines. By default, ^DJI (**Dow Jones**) and ^SPX (**S&P 500**) are listed in stocks.txt. To edit the stocks with *vim*, you can run:
+
+```bash
+vim ~/.stocks/stocks.txt
+```
+
 ## Install
 
-To install the stocks program, first you must install the necessary apt packages. Curl and JSON is needed for retrieving the data from Yahoo Finance. Ncurses is the library used to create the terminal user interface.
+![Icon](icon.png)
+
+Before you can install the stocks program, you first need to install the necessary apt packages. Curl and JSON are needed for retrieving data from Yahoo Finance. Ncurses is the library used to create the terminal user interface.
 
 ```bash
 sudo apt install libjson-c-dev libcurl4-openssl-dev libncurses-dev
 ```
 
-After installing the apt packages, you can make the `stocks` program using the makefile.
+To install the stocks program, you only need to run the makefile, which compiles the stocks program, creates the ~/.stocks/ directory with stocks.txt and creates a desktop application.
 
 ```bash
 make
 ```
 
-Now, the stocks program is available as an executable program, only accessable from this repo. If you want to make it accessable from anywhere on the computer, you can add the path to this repo in your `.bashrc` and resource it.
+By default, the executable stocks program is only accessible from this repo. If you want to make it accessable from anywhere on the computer, you can add the path to this repo in your `.bashrc` and resource it.
 
-![Icon](icon.png)
+## Remove
 
-Alternetivly, you can create a desktop application by filling in the full path to this repo in the `stocks.desktop` file and add it to `~/.local/share/applications/` for the local user, or `/usr/share/applications/` for all users. Either copy the file into one of these directories or create a symlink with:
+To remove the stocks program from your computer, you can run the makefile remove target, which will remove the stock executable program, the ~/.stocks/ directory and the desktop application - all traces of the stocks program.
 
 ```bash
-ln -s stocks.desktop ~/.local/share/applications/
+make remove
 ```
 
 ## Libraries
